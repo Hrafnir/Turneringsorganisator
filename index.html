@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skoleturnering Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Henter inn ikoner -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+
+    <nav>
+        <div class="logo">🏐 Turnering 10. Trinn</div>
+        <div class="tabs">
+            <button onclick="showTab('setup')" class="active">1. Oppsett</button>
+            <button onclick="showTab('draw')">2. Lagtrekning</button>
+            <button onclick="showTab('matches')">3. Kamper & Tid</button>
+            <button onclick="showTab('standings')">4. Tabell</button>
+        </div>
+    </nav>
+
+    <!-- TAB 1: OPPSETT -->
+    <div id="setup" class="tab-content active">
+        <div class="container">
+            <h2>Importer Elever</h2>
+            <p>Lim inn navnelister fra Excel. Velg hvilken klasse listen tilhører før du trykker "Legg til".</p>
+            
+            <div class="input-group">
+                <select id="classSelect">
+                    <option value="10A">10A</option>
+                    <option value="10B">10B</option>
+                    <option value="10C">10C</option>
+                    <option value="10D">10D</option>
+                </select>
+                <textarea id="pasteArea" placeholder="Lim inn navn her (ett navn per linje)..."></textarea>
+                <button onclick="addStudents()">Legg til i liste</button>
+            </div>
+
+            <h3>Registrer Fravær</h3>
+            <p>Kryss av de som <strong>IKKE</strong> er til stede i dag.</p>
+            <div id="studentList" class="student-grid"></div>
+            
+            <div class="actions">
+                <button class="btn-primary" onclick="prepareTeams()">Gå til Lagtrekning <i class="fas fa-arrow-right"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: LAGTREKNING -->
+    <div id="draw" class="tab-content">
+        <div class="container">
+            <h2>Lagtrekning</h2>
+            <div class="controls">
+                <label>Antall lag som skal lages (Må være partall, helst 12): </label>
+                <input type="number" id="teamCount" value="12" min="4" max="20" step="2">
+                <button class="btn-spectacular" onclick="generateTeamsAnimated()">🎲 GENERER LAG (ANIMASJON)</button>
+                <button class="btn-text" onclick="generateTeamsQuick()">Kjapp generering (uten animasjon)</button>
+            </div>
+
+            <div id="drawDisplay" class="draw-grid">
+                <!-- Lagene vises her -->
+            </div>
+             <div class="actions">
+                <button class="btn-primary" onclick="generateSchedule(); showTab('matches')">Lag Kampoppsett <i class="fas fa-calendar-alt"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: KAMPER -->
+    <div id="matches" class="tab-content">
+        <div class="match-layout">
+            <div class="sidebar">
+                <h3>Styringspanel</h3>
+                
+                <div class="timer-box">
+                    <div id="timerDisplay">15:00</div>
+                    <div class="timer-controls">
+                        <button onclick="startTimer()" class="btn-green"><i class="fas fa-play"></i></button>
+                        <button onclick="pauseTimer()" class="btn-yellow"><i class="fas fa-pause"></i></button>
+                        <button onclick="resetTimer()" class="btn-red"><i class="fas fa-undo"></i></button>
+                    </div>
+                    <div class="timer-settings">
+                        <label>Kampvarighet (min): <input type="number" id="matchDuration" value="15"></label>
+                    </div>
+                </div>
+
+                <div class="sound-controls">
+                    <button onclick="playSound()">🔊 Test Signal</button>
+                </div>
+            </div>
+
+            <div class="main-schedule">
+                <h2>Kampoppsett</h2>
+                <div id="scheduleContainer">
+                    <!-- Kampene genereres her -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: TABELL -->
+    <div id="standings" class="tab-content">
+        <div class="container">
+            <h2>Tabell</h2>
+            <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th>Plass</th>
+                        <th>Lag</th>
+                        <th>Kamper</th>
+                        <th>Seier</th>
+                        <th>Uavgjort</th>
+                        <th>Tap</th>
+                        <th>Poeng</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboardBody">
+                    <!-- Tabellrader settes inn her -->
+                </tbody>
+            </table>
+            
+            <div class="finals-section">
+                <h2>Finaler (Kl 14:00)</h2>
+                <button onclick="generateFinals()">Generer Finaler basert på Tabell</button>
+                <div id="finalsContainer" class="finals-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
