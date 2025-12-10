@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Turneringssjefen v5.0</title>
+    <title>Turneringssjefen v6.0</title>
+    <!-- Hindrer 404 på favicon -->
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -22,20 +24,29 @@
 
     <!-- NAV -->
     <nav>
-        <div class="logo">🏆 Turneringssjefen <span class="version">v5.0</span></div>
-        <div class="file-controls">
-            <button onclick="saveToFile()" class="btn-small-blue"><i class="fas fa-download"></i> Lagre</button>
-            <label class="btn-small-blue">
-                <i class="fas fa-upload"></i> Last inn
-                <input type="file" id="fileInput" onchange="loadFromFile()" style="display:none;">
-            </label>
+        <div class="logo-area">
+            <div class="logo">🏆 <span id="displayTitle">Turnering</span> <span class="version">v6.0</span></div>
+            <input type="text" id="tournamentTitleInput" placeholder="Skriv tittel her..." onchange="updateTitle(this.value)" class="title-input">
         </div>
+        
+        <div class="nav-actions">
+            <button id="wakeLockBtn" onclick="toggleWakeLock()" class="btn-small-grey" title="Hindre at skjermen slukner"><i class="fas fa-eye"></i> Skjerm: Auto</button>
+            
+            <div class="file-controls">
+                <button onclick="saveToFile()" class="btn-small-blue"><i class="fas fa-download"></i> Lagre</button>
+                <label class="btn-small-blue">
+                    <i class="fas fa-upload"></i> Last inn
+                    <input type="file" id="fileInput" onchange="loadFromFile()" style="display:none;">
+                </label>
+            </div>
+        </div>
+
         <div class="tabs">
             <button onclick="showTab('setup')" class="active">1. Oppsett</button>
             <button onclick="showTab('arena')">2. Arena</button>
             <button onclick="showTab('draw')">3. Lag</button>
             <button onclick="showTab('matches')">4. Kampplan</button>
-            <button onclick="showTab('finals')">5. FINALE-ARENA</button>
+            <button onclick="showTab('finals')">5. Finale</button>
             <button onclick="confirmReset()" class="btn-small-red"><i class="fas fa-trash"></i></button>
         </div>
     </nav>
@@ -60,6 +71,7 @@
                 <div class="list-section">
                     <div class="header-row">
                         <h3>Registrerte (<span id="studentCount">0</span>)</h3>
+                        <input type="text" id="studentSearch" placeholder="🔍 Søk etter navn..." onkeyup="renderStudentList()" class="search-input">
                         <button onclick="clearStudents()" class="btn-text-red">Slett alle</button>
                     </div>
                     <div id="studentList" class="student-grid"></div>
@@ -77,11 +89,14 @@
             <h2>2. Tider og Baner</h2>
             <div class="config-grid">
                 <div class="config-box">
-                    <h3>⏰ Tidsplan</h3>
+                    <h3>⏰ Tidsplan & Justering</h3>
+                    <p class="small-info">Endringer her påvirker "Oppdater fremtidige tider".</p>
                     <div class="form-row"><label>Starttid:</label><input type="time" id="startTime" value="10:15"></div>
                     <div class="form-row"><label>Finalestart:</label><input type="time" id="finalsTime" value="14:00"></div>
                     <div class="form-row"><label>Kamptid (min):</label><input type="number" id="matchDuration" value="15"></div>
                     <div class="form-row"><label>Pause (min):</label><input type="number" id="breakDuration" value="5"></div>
+                    
+                    <button class="btn-yellow-outline" onclick="recalcFutureSchedule()">🔄 Oppdater fremtidige tider basert på nye tall</button>
                 </div>
                 <div class="config-box">
                     <h3>🏟️ Baner</h3>
@@ -102,44 +117,43 @@
             
             <div class="draw-controls">
                 <div class="draw-option">
-                    <label>Inndelingsmetode:</label>
+                    <label>Metode:</label>
                     <select id="drawStrategy" onchange="toggleCustomMix()">
-                        <option value="balanced">⚖️ Perfekt Miks (Jevn fordeling)</option>
-                        <option value="class_based">🏫 Klassevis (Rene klasselag)</option>
-                        <option value="ab_cd">🅰️🅱️ Standard Base (A+B vs C+D)</option>
-                        <option value="custom">🛠️ Egendefinert Miks</option>
-                        <option value="random">🎲 Fullt Kaos</option>
+                        <option value="balanced">⚖️ Perfekt Miks (Jevn)</option>
+                        <option value="class_based">🏫 Klassevis (Rene lag)</option>
+                        <option value="ab_cd">🅰️🅱️ A+B vs C+D</option>
+                        <option value="custom">🛠️ Egendefinert</option>
+                        <option value="random">🎲 Kaos</option>
                     </select>
                 </div>
                 
                 <div id="customMixPanel" class="hidden custom-mix-panel">
-                    <p>Velg klasser til <strong>Pulje 1</strong> (Resten går til Pulje 2):</p>
+                    <p>Pulje 1 (resten blir Pulje 2):</p>
                     <div id="customClassCheckboxes" class="checkbox-group"></div>
                 </div>
 
                 <div class="draw-option">
-                    <label>Antall lag totalt:</label>
+                    <label>Antall lag:</label>
                     <input type="number" id="teamCount" value="12" style="width:60px;">
                 </div>
 
-                <button class="btn-primary" onclick="generateTeams()">⚡ Generer Lag</button>
+                <button class="btn-primary" onclick="generateTeams()">⚡ Generer</button>
                 <button id="lockBtn" class="btn-yellow" onclick="toggleLockTeams()"><i class="fas fa-unlock"></i> Åpen</button>
             </div>
 
             <div id="drawDisplay" class="draw-grid"></div>
             
             <div class="generate-section">
-                <button class="btn-spectacular" onclick="generateSchedule()">📅 Lag Kampoppsett</button>
+                <button class="btn-spectacular" onclick="generateSchedule()">📅 Generer Kampoppsett</button>
             </div>
         </div>
     </div>
 
     <!-- TAB 4: KAMPPLAN -->
     <div id="matches" class="tab-content">
-        <!-- SYSTEM CLOCK HEADER -->
         <div class="system-clock-bar">
-            <div>Systemklokke: <span id="realTimeClock">--:--:--</span></div>
-            <div id="nextEventInfo">Neste hendelse: Ingen</div>
+            <div><i class="far fa-clock"></i> <span id="realTimeClock">--:--:--</span></div>
+            <div id="nextEventInfo">Neste: Ingen</div>
             <button onclick="toggleSound()" id="soundToggleBtn">🔊 Lyd PÅ</button>
         </div>
 
@@ -152,20 +166,18 @@
         </div>
     </div>
 
-    <!-- TAB 5: FINALE ARENA -->
+    <!-- TAB 5: FINALE -->
     <div id="finals" class="tab-content">
         <div class="finals-layout">
-            <!-- Sidebar for setup -->
             <div class="finals-sidebar">
-                <h3>Oppsett</h3>
+                <h3>Finaleoppsett</h3>
                 <label>Lag 1:</label><select id="finalTeam1"></select>
                 <label>Lag 2:</label><select id="finalTeam2"></select>
                 <label>Type:</label><select id="finalType"><option>Gullfinale</option><option>Bronsefinale</option><option>Finale</option></select>
                 <label>Aktivitet:</label><input type="text" id="finalAct" value="Volleyball">
                 <button onclick="setActiveFinal()" class="btn-primary" style="width:100%; margin-top:10px;">Send til Storskjerm</button>
-                
                 <hr>
-                <h3>Leaderboard</h3>
+                <h3>Tabell (Topp 8)</h3>
                 <div class="mini-leaderboard">
                     <table class="leaderboard-table small">
                         <thead><tr><th>#</th><th>Lag</th><th>P</th></tr></thead>
@@ -174,24 +186,21 @@
                 </div>
             </div>
 
-            <!-- Main Stage -->
             <div class="finals-stage">
                 <div id="activeFinalDisplay">
-                    <h1 id="stageTitle">VENTER PÅ FINALE...</h1>
+                    <h1 id="stageTitle">VENTER...</h1>
                     <h2 id="stageActivity"></h2>
-                    
                     <div class="stage-teams">
                         <div class="stage-team">
                             <span id="stageT1">Lag A</span>
-                            <input type="number" id="stageS1" value="0" onchange="updateStageScore()">
+                            <input type="number" id="stageS1" value="0">
                         </div>
                         <div class="versus">VS</div>
                         <div class="stage-team">
                             <span id="stageT2">Lag B</span>
-                            <input type="number" id="stageS2" value="0" onchange="updateStageScore()">
+                            <input type="number" id="stageS2" value="0">
                         </div>
                     </div>
-
                     <div class="stage-timer">
                         <div id="finalTimerDisplay">15:00</div>
                         <div class="stage-controls">
@@ -200,13 +209,13 @@
                             <button onclick="playHorn()" class="btn-grey">📣 HORN</button>
                         </div>
                     </div>
-
                     <button class="btn-spectacular" style="margin-top:50px;" onclick="endTournament()">🏆 KÅR VINNER</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- SCRIPT LASTES HER FOR Å UNNGÅ 'UNDEFINED' FEIL -->
     <script src="script.js"></script>
 </body>
 </html>
