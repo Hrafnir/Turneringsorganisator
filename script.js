@@ -19,7 +19,7 @@ let data = {
     teamsLocked: false
 };
 
-// --- INIT & PERSISTENCE ---
+// --- INIT ---
 window.onload = function() {
     loadLocal();
     renderClassButtons();
@@ -31,70 +31,51 @@ window.onload = function() {
     updateTimerDisplay(data.settings.matchDuration * 60);
 };
 
-function saveLocal() {
-    localStorage.setItem('ts3_ultimate', JSON.stringify(data));
-}
-
+// --- STORAGE ---
+function saveLocal() { localStorage.setItem('ts_v4', JSON.stringify(data)); }
 function loadLocal() {
-    const json = localStorage.getItem('ts3_ultimate');
+    const json = localStorage.getItem('ts_v4');
     if(json) {
         const parsed = JSON.parse(json);
-        // Merge for compatibility if new fields added later
         data = { ...data, ...parsed };
-        // Update inputs
-        document.getElementById('startTime').value = data.settings.startTime;
-        document.getElementById('finalsTime').value = data.settings.finalsTime;
-        document.getElementById('matchDuration').value = data.settings.matchDuration;
-        document.getElementById('breakDuration').value = data.settings.breakDuration;
+        updateInputs();
     }
 }
-
-// FILE I/O
-function saveToFile() {
-    const str = JSON.stringify(data, null, 2);
-    const blob = new Blob([str], {type: "application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `turnering_backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
+function updateInputs() {
+    document.getElementById('startTime').value = data.settings.startTime;
+    document.getElementById('finalsTime').value = data.settings.finalsTime;
+    document.getElementById('matchDuration').value = data.settings.matchDuration;
+    document.getElementById('breakDuration').value = data.settings.breakDuration;
 }
 
+function saveToFile() {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `turnering_v4_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+}
 function loadFromFile() {
-    const input = document.getElementById('fileInput');
-    if(input.files.length === 0) return;
-    const file = input.files[0];
+    const file = document.getElementById('fileInput').files[0];
+    if(!file) return;
     const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            data = JSON.parse(e.target.result);
-            saveLocal();
-            location.reload();
-        } catch(err) {
-            alert("Kunne ikke lese fil. Er det en gyldig JSON?");
-        }
+    reader.onload = e => {
+        try { data = JSON.parse(e.target.result); saveLocal(); location.reload(); }
+        catch(err) { alert("Feil filformat"); }
     };
     reader.readAsText(file);
 }
-
-function confirmReset() {
-    if(confirm("Dette sletter ALT (elever, oppsett, resultater). Er du sikker?")) {
-        localStorage.removeItem('ts3_ultimate');
-        location.reload();
-    }
-}
+function confirmReset() { if(confirm("Slett ALT?")) { localStorage.removeItem('ts_v4'); location.reload(); } }
 
 // --- TABS ---
 function showTab(id) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
     document.getElementById(id).classList.add('active');
-    // Highlight tab button?
 }
 
-// --- CLASS MANAGEMENT ---
+// --- CLASSES & STUDENTS ---
 let selectedClass = "";
-
 function renderClassButtons() {
     const div = document.getElementById('classButtons');
     div.innerHTML = '';
@@ -105,622 +86,476 @@ function renderClassButtons() {
         btn.onclick = () => { selectedClass = c; renderClassButtons(); };
         div.appendChild(btn);
     });
-    // Select first if none
-    if(!selectedClass && data.classes.length > 0) {
-        selectedClass = data.classes[0];
-        renderClassButtons();
-    }
+    if(!selectedClass && data.classes.length) { selectedClass = data.classes[0]; renderClassButtons(); }
 }
-
 function addClass() {
-    const inp = document.getElementById('newClassInput');
-    const val = inp.value.trim().toUpperCase();
-    if(val && !data.classes.includes(val)) {
-        data.classes.push(val);
-        data.classes.sort();
-        saveLocal();
-        renderClassButtons();
-        inp.value = "";
-    }
+    const val = document.getElementById('newClassInput').value.trim().toUpperCase();
+    if(val && !data.classes.includes(val)) { data.classes.push(val); data.classes.sort(); saveLocal(); renderClassButtons(); }
 }
-
 function removeClass(c) {
-    if(confirm(`Slette klassen ${c}? Elever i klassen vil miste klassetilhørighet.`)) {
-        data.classes = data.classes.filter(x => x !== c);
-        if(selectedClass === c) selectedClass = "";
-        saveLocal();
-        renderClassButtons();
-    }
+    if(confirm(`Slett ${c}?`)) { data.classes = data.classes.filter(x=>x!==c); saveLocal(); renderClassButtons(); }
 }
-
-// --- STUDENTS ---
 function addStudents() {
-    if(!selectedClass) { alert("Velg en klasse først!"); return; }
+    if(!selectedClass) return alert("Velg klasse");
     const txt = document.getElementById('pasteArea').value;
-    txt.split('\n').forEach(line => {
-        const name = line.trim();
-        if(name) {
-            data.students.push({
-                id: Math.random().toString(36).substr(2,9),
-                name: name,
-                class: selectedClass,
-                present: true
-            });
-        }
+    txt.split('\n').forEach(l => {
+        const n = l.trim();
+        if(n) data.students.push({ id: genId(), name: n, class: selectedClass, present: true });
     });
-    document.getElementById('pasteArea').value = "";
-    saveLocal();
-    renderStudentList();
+    document.getElementById('pasteArea').value = ""; saveLocal(); renderStudentList();
 }
-
 function renderStudentList() {
     const list = document.getElementById('studentList');
     list.innerHTML = '';
     document.getElementById('studentCount').innerText = data.students.length;
-    
-    // Sort by Class then Name
     data.students.sort((a,b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name));
-
     data.students.forEach(s => {
         const div = document.createElement('div');
         div.className = `student-item ${s.present?'':'absent'}`;
-        div.innerHTML = `
-            <span><b>${s.class}</b> ${s.name}</span>
-            <input type="checkbox" ${s.present?'checked':''} onchange="togglePresence('${s.id}')">
-        `;
+        div.innerHTML = `<span><b>${s.class}</b> ${s.name}</span><input type="checkbox" ${s.present?'checked':''} onchange="togglePres('${s.id}')">`;
         list.appendChild(div);
     });
 }
+function togglePres(id) { const s = data.students.find(x=>x.id==id); if(s) { s.present=!s.present; saveLocal(); renderStudentList(); } }
+function clearStudents() { if(confirm("Slett alle?")) { data.students=[]; saveLocal(); renderStudentList(); } }
 
-function togglePresence(id) {
-    const s = data.students.find(x => x.id === id);
-    if(s) { s.present = !s.present; saveLocal(); renderStudentList(); }
-}
-
-function clearStudents() {
-    if(confirm("Slette alle elever?")) {
-        data.students = [];
-        saveLocal();
-        renderStudentList();
-    }
-}
-
-// --- ARENA CONFIG ---
+// --- ARENA ---
 function renderCourts() {
-    const list = document.getElementById('courtList');
-    list.innerHTML = '';
-    data.courts.forEach((c, idx) => {
-        const div = document.createElement('div');
-        div.className = 'court-item';
-        div.innerHTML = `
-            <span>#${idx+1}</span>
-            <input type="text" value="${c.name}" onchange="updateCourt(${idx}, 'name', this.value)" placeholder="Banenavn">
-            <input type="text" value="${c.type}" onchange="updateCourt(${idx}, 'type', this.value)" placeholder="Aktivitet (f.eks Volleyball)">
-            <button class="btn-small-red" onclick="removeCourt(${idx})">X</button>
-        `;
-        list.appendChild(div);
+    const list = document.getElementById('courtList'); list.innerHTML='';
+    data.courts.forEach((c,i) => {
+        const d = document.createElement('div'); d.className='court-item';
+        d.innerHTML = `<span>#${i+1}</span><input value="${c.name}" onchange="updCourt(${i},'name',this.value)"><input value="${c.type}" onchange="updCourt(${i},'type',this.value)"><button class="btn-small-red" onclick="delCourt(${i})">X</button>`;
+        list.appendChild(d);
     });
 }
-
-function addCourt() {
-    data.courts.push({id: Date.now(), name: `Bane ${data.courts.length+1}`, type: "Aktivitet"});
-    saveLocal();
-    renderCourts();
-}
-
-function updateCourt(idx, field, val) {
-    data.courts[idx][field] = val;
-    saveLocal();
-}
-
-function removeCourt(idx) {
-    data.courts.splice(idx, 1);
-    saveLocal();
-    renderCourts();
-}
-
-// Inputs listeners
-['startTime','finalsTime','matchDuration','breakDuration'].forEach(id => {
-    document.getElementById(id).addEventListener('change', (e) => {
-        data.settings[id] = e.target.type === 'number' ? parseInt(e.target.value) : e.target.value;
-        saveLocal();
-    });
+function addCourt() { data.courts.push({id:Date.now(), name:`Bane ${data.courts.length+1}`, type:"Volleyball"}); saveLocal(); renderCourts(); }
+function updCourt(i,f,v) { data.courts[i][f]=v; saveLocal(); }
+function delCourt(i) { data.courts.splice(i,1); saveLocal(); renderCourts(); }
+['startTime','finalsTime','matchDuration','breakDuration'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', e=>{ data.settings[id]=e.target.value; saveLocal(); });
 });
 
-// --- TEAM DRAW ---
+// --- TEAM DRAW V4.0 ---
+// Fisher-Yates Shuffle
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
 function generateTeamsAnimated() {
-    if(data.teamsLocked) { alert("Lås opp lagene først."); return; }
-    
+    if(data.teamsLocked) return alert("Lås opp lagene først.");
     const count = parseInt(document.getElementById('teamCount').value);
-    const presentStudents = data.students.filter(s => s.present);
+    const strategy = document.getElementById('drawStrategy').value;
+    const pool = data.students.filter(s => s.present);
     
-    // Sort students by class to distribute evenly
-    const byClass = {};
-    data.classes.forEach(c => byClass[c] = []);
-    // Also catch students with deleted classes
-    presentStudents.forEach(s => {
-        if(!byClass[s.class]) byClass[s.class] = [];
-        byClass[s.class].push(s);
-    });
-
-    // Shuffle each class
-    for(let c in byClass) byClass[c].sort(() => Math.random() - 0.5);
-
-    data.teams = Array.from({length: count}, (_, i) => ({
-        id: i+1, name: `Lag ${i+1}`, members: [], points:0, stats:{p:0, w:0, d:0, l:0, gf:0, ga:0}
+    // Init Teams
+    data.teams = Array.from({length: count}, (_,i) => ({
+        id: i+1, name: `Lag ${i+1}`, members: [], points:0, stats:{p:0,w:0,d:0,l:0,gf:0,ga:0}
     }));
 
-    // Round robin deal
-    let teamIdx = 0;
-    let anyLeft = true;
-    while(anyLeft) {
-        anyLeft = false;
-        for(let c in byClass) {
-            if(byClass[c].length > 0) {
-                data.teams[teamIdx].members.push(byClass[c].pop());
-                teamIdx = (teamIdx + 1) % count;
-                anyLeft = true;
+    if(strategy === 'random') {
+        shuffle(pool);
+        pool.forEach((s, i) => data.teams[i % count].members.push(s));
+    } 
+    else if (strategy === 'balanced') {
+        // Group by class, shuffle each class, then round-robin
+        let byClass = {};
+        data.classes.forEach(c => byClass[c] = []);
+        pool.forEach(s => { if(!byClass[s.class]) byClass[s.class]=[]; byClass[s.class].push(s); });
+        
+        let tIdx = 0;
+        let active = true;
+        while(active) {
+            active = false;
+            for(let c in byClass) {
+                if(byClass[c].length) {
+                    shuffle(byClass[c]);
+                    data.teams[tIdx].members.push(byClass[c].pop());
+                    tIdx = (tIdx + 1) % count;
+                    active = true;
+                }
             }
         }
     }
+    else if (strategy === 'ab_cd') {
+        // Half teams get A+B, Half teams get C+D (Simplified Grouping)
+        // Group classes into 2 super-groups
+        const mid = Math.ceil(data.classes.length / 2);
+        const group1Classes = data.classes.slice(0, mid);
+        
+        const pool1 = pool.filter(s => group1Classes.includes(s.class));
+        const pool2 = pool.filter(s => !group1Classes.includes(s.class));
+        
+        const teams1 = data.teams.slice(0, Math.ceil(count/2));
+        const teams2 = data.teams.slice(Math.ceil(count/2));
+        
+        // Distribute pool1 to teams1
+        shuffle(pool1);
+        pool1.forEach((s, i) => teams1[i % teams1.length].members.push(s));
+        
+        // Distribute pool2 to teams2
+        shuffle(pool2);
+        pool2.forEach((s, i) => teams2[i % teams2.length].members.push(s));
+    }
+
+    saveLocal();
+    renderTeams();
+}
+
+function deleteTeam(id) {
+    if(data.teamsLocked) return alert("Lås opp først");
+    if(!confirm("Slett lag? Spillerne vil bli fordelt på de andre lagene.")) return;
     
+    const teamToRemove = data.teams.find(t => t.id === id);
+    if(!teamToRemove) return;
+    const orphans = teamToRemove.members;
+    
+    // Remove team
+    data.teams = data.teams.filter(t => t.id !== id);
+    
+    // Redistribute orphans to smallest teams
+    shuffle(orphans);
+    orphans.forEach(s => {
+        // Sort teams by size
+        data.teams.sort((a,b) => a.members.length - b.members.length);
+        data.teams[0].members.push(s);
+    });
+    
+    // Renumber teams IDs logically or keep them? Keeping IDs is safer for existing logic, 
+    // but names might be weird. Let's just update view.
     saveLocal();
     renderTeams();
 }
 
 function renderTeams() {
-    const container = document.getElementById('drawDisplay');
-    container.innerHTML = '';
+    const box = document.getElementById('drawDisplay'); box.innerHTML='';
     data.teams.forEach(t => {
         const div = document.createElement('div');
         div.className = 'team-card';
-        div.ondragover = e => e.preventDefault();
-        div.ondrop = e => handleDrop(e, t.id);
-
-        const mems = t.members.map(m => `
-            <div class="team-member" draggable="${!data.teamsLocked}" ondragstart="handleDrag(event, '${m.id}', ${t.id})">
-                ${m.name} <small>(${m.class})</small>
-            </div>
-        `).join('');
+        div.ondragover=e=>e.preventDefault(); div.ondrop=e=>handleDrop(e,t.id);
         
-        div.innerHTML = `<h3><input value="${t.name}" onchange="renameTeam(${t.id}, this.value)" style="background:none;border:none;color:inherit;text-align:center;font-weight:bold;width:100%;"></h3><div>${mems}</div>`;
-        container.appendChild(div);
+        const mems = t.members.map((m, i) => `
+            <div class="team-member" draggable="${!data.teamsLocked}" ondragstart="drag(event,'${m.id}',${t.id})">
+                <span><span class="team-num">${i+1}.</span> ${m.name} <small>(${m.class})</small></span>
+            </div>`).join('');
+            
+        div.innerHTML = `
+            <h3><input value="${t.name}" onchange="renameTeam(${t.id},this.value)" style="background:none;border:none;color:inherit;text-align:center;font-weight:bold;width:80%;"></h3>
+            ${!data.teamsLocked ? `<button class="team-delete" onclick="deleteTeam(${t.id})"><i class="fas fa-times"></i></button>` : ''}
+            <div>${mems}</div>
+        `;
+        box.appendChild(div);
     });
     updateLockBtn();
 }
 
-function renameTeam(id, val) {
-    const t = data.teams.find(x => x.id === id);
-    if(t) t.name = val;
-    saveLocal();
-}
-
-// Drag Drop Logic
+// Drag & Drop
 let dragSrc = null;
-function handleDrag(e, mId, tId) { dragSrc = {mId, tId}; e.target.classList.add('dragging'); }
-function handleDrop(e, targetTid) {
+function drag(e,mId,tId){ dragSrc={mId,tId}; }
+function handleDrop(e,tId){
     e.preventDefault();
-    if(data.teamsLocked || !dragSrc) return;
-    if(dragSrc.tId === targetTid) return;
-    
-    const srcTeam = data.teams.find(t => t.id === dragSrc.tId);
-    const tgtTeam = data.teams.find(t => t.id === targetTid);
-    const mIdx = srcTeam.members.findIndex(m => m.id === dragSrc.mId);
-    
-    if(mIdx > -1) {
-        tgtTeam.members.push(srcTeam.members.splice(mIdx, 1)[0]);
-        saveLocal();
-        renderTeams();
-    }
-    dragSrc = null;
+    if(data.teamsLocked || !dragSrc || dragSrc.tId===tId) return;
+    const sT = data.teams.find(t=>t.id===dragSrc.tId);
+    const tT = data.teams.find(t=>t.id===tId);
+    const mIdx = sT.members.findIndex(m=>m.id==dragSrc.mId);
+    if(mIdx>-1) { tT.members.push(sT.members.splice(mIdx,1)[0]); saveLocal(); renderTeams(); }
+}
+function renameTeam(id,v){ data.teams.find(t=>t.id===id).name=v; saveLocal(); }
+function toggleLockTeams(){ data.teamsLocked=!data.teamsLocked; saveLocal(); renderTeams(); }
+function updateLockBtn(){ 
+    const b=document.getElementById('lockBtn'); 
+    b.className=data.teamsLocked?'btn-small-red':'btn-yellow';
+    b.innerHTML=data.teamsLocked?'<i class="fas fa-lock"></i> Låst':'<i class="fas fa-unlock"></i> Åpen'; 
 }
 
-function toggleLockTeams() {
-    data.teamsLocked = !data.teamsLocked;
-    saveLocal();
-    renderTeams();
-}
-function updateLockBtn() {
-    const btn = document.getElementById('lockBtn');
-    btn.innerHTML = data.teamsLocked ? '<i class="fas fa-lock"></i> Låst' : '<i class="fas fa-unlock"></i> Åpen';
-    btn.className = data.teamsLocked ? 'btn-small-red' : 'btn-yellow';
-}
-
-// --- SCHEDULER (THE BRAIN) ---
+// --- SCHEDULE & PAUSES ---
 function generateSchedule() {
-    if(data.courts.length === 0) { alert("Du må definere minst én bane i 'Arena' fanen."); return; }
+    if(data.courts.length===0) return alert("Ingen baner!");
     if(!data.teamsLocked) toggleLockTeams();
     
     data.matches = [];
+    let start = new Date(`2000-01-01T${data.settings.startTime}`);
+    const end = new Date(`2000-01-01T${data.settings.finalsTime}`);
+    const matchMin = parseInt(data.settings.matchDuration);
+    const breakMin = parseInt(data.settings.breakDuration);
+    const slotDur = matchMin + breakMin;
     
-    // Time Setup
-    let time = new Date();
-    const [sh, sm] = data.settings.startTime.split(':');
-    time.setHours(sh, sm, 0);
-    
-    const [fh, fm] = data.settings.finalsTime.split(':');
-    let finalsTime = new Date();
-    finalsTime.setHours(fh, fm, 0);
-
-    const matchMin = data.settings.matchDuration;
-    const breakMin = data.settings.breakDuration;
-    const roundDuration = matchMin + breakMin;
-
-    // Available minutes
-    const totalMinutes = (finalsTime - time) / 60000;
-    const maxRounds = Math.floor(totalMinutes / roundDuration);
-    
-    // Round Robin Generator
-    let teamIds = data.teams.map(t => t.id);
-    if(teamIds.length % 2 !== 0) teamIds.push(null); // Bye
-    
-    const rounds = [];
-    const numTeams = teamIds.length;
-    
-    // Generate all unique pairings (Circle Method)
-    // We need enough matches to fill the time. 
-    // Standard RR: numTeams - 1 rounds.
-    // If maxRounds > RR rounds, we repeat.
-    
-    let currentRotation = [...teamIds];
-    
-    for(let r=0; r < maxRounds; r++) {
-        let roundMatches = [];
-        
-        // Pairings for this rotation
-        for(let i=0; i<numTeams/2; i++) {
-            const t1 = currentRotation[i];
-            const t2 = currentRotation[numTeams - 1 - i];
-            if(t1 !== null && t2 !== null) {
-                roundMatches.push({t1, t2});
-            }
+    // Round Robin Logic
+    let ids = data.teams.map(t=>t.id);
+    if(ids.length%2!==0) ids.push(null);
+    let rounds = [];
+    for(let r=0; r<ids.length-1; r++){
+        let round = [];
+        for(let i=0; i<ids.length/2; i++){
+            if(ids[i]!==null && ids[ids.length-1-i]!==null) 
+                round.push({t1:ids[i], t2:ids[ids.length-1-i]});
         }
-        
-        // Rotate array
-        currentRotation.splice(1, 0, currentRotation.pop());
-        
-        rounds.push(roundMatches);
+        rounds.push(round);
+        ids.splice(1,0,ids.pop());
     }
     
-    // ASSIGN TO COURTS
-    // For each round slot in time:
-    // Take the top X matches from the generated round matches where X is num courts.
-    // Wait, standard RR puts all teams in play at once. 
-    // If we have 12 teams (6 matches) but only 3 courts, we have to split the "RR Round" into 2 "Time Rounds".
+    // Assign to time/courts
+    let allMatches = rounds.flat();
+    let roundNum = 1;
     
-    // Flatten all pairings from the Loop logic
-    let allPairingsQueue = rounds.flat(); // This is just a stream of matches to be played
-    
-    // Create Time Slots
-    let roundCounter = 1;
-    let currentTime = new Date(time);
-    
-    while(currentTime < finalsTime && allPairingsQueue.length > 0) {
-        let activeMatches = [];
-        
-        // Fill Courts
-        data.courts.forEach(court => {
-            if(allPairingsQueue.length > 0) {
-                // To avoid teams playing twice in same timeslot?
-                // The queue comes from RR rounds, so usually distinct teams. 
-                // But if we split an RR round across time slots, we are fine.
-                // PROBLEM: If we take match 1 (Team A vs B) and match 2 (Team C vs A) -> A plays twice.
-                // SOLUTION: Check if teams are already playing in this timeslot.
-                
-                let matchIndex = -1;
-                for(let i=0; i < allPairingsQueue.length; i++) {
-                    const pair = allPairingsQueue[i];
-                    const t1Busy = activeMatches.some(m => m.t1 === pair.t1 || m.t2 === pair.t1);
-                    const t2Busy = activeMatches.some(m => m.t1 === pair.t2 || m.t2 === pair.t2);
-                    
-                    if(!t1Busy && !t2Busy) {
-                        matchIndex = i;
-                        break;
-                    }
-                }
-                
-                if(matchIndex > -1) {
-                    const pair = allPairingsQueue.splice(matchIndex, 1)[0];
-                    activeMatches.push({
-                        ...pair,
-                        courtName: court.name,
-                        courtType: court.type
-                    });
+    while(start < end && allMatches.length > 0) {
+        let active = [];
+        data.courts.forEach(c => {
+            if(allMatches.length) {
+                // Find match where teams aren't busy in this slot
+                let mIdx = allMatches.findIndex(m => 
+                    !active.some(a => a.t1===m.t1 || a.t2===m.t1 || a.t1===m.t2 || a.t2===m.t2)
+                );
+                if(mIdx > -1) {
+                    let m = allMatches.splice(mIdx, 1)[0];
+                    active.push({...m, cName: c.name, cType: c.type});
                 }
             }
         });
         
-        if(activeMatches.length === 0) break; // No valid matches found
+        if(active.length===0) break; // Should not happen often
         
-        // Add to schedule
-        const timeStr = currentTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        activeMatches.forEach(m => {
+        let timeStr = start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        active.forEach(m => {
             data.matches.push({
-                id: Math.random().toString(36).substr(2,9),
-                time: timeStr,
-                round: roundCounter,
-                t1: m.t1, t2: m.t2,
-                court: m.courtName, type: m.courtType,
+                id: genId(), time: timeStr, round: roundNum,
+                t1: m.t1, t2: m.t2, court: m.cName, type: m.cType,
                 s1: null, s2: null, done: false
             });
         });
         
-        currentTime.setMinutes(currentTime.getMinutes() + roundDuration);
-        roundCounter++;
+        start.setMinutes(start.getMinutes() + slotDur);
+        roundNum++;
     }
-    
-    saveLocal();
-    renderSchedule();
-    showTab('matches');
+    saveLocal(); renderSchedule(); showTab('matches');
 }
 
 function renderSchedule() {
-    const list = document.getElementById('scheduleContainer');
-    list.innerHTML = '';
-    
+    const con = document.getElementById('scheduleContainer'); con.innerHTML='';
     let lastTime = "";
-    data.matches.forEach(m => {
+    
+    // Sorter på tid (viktig hvis vi forskyver)
+    data.matches.sort((a,b) => a.time.localeCompare(b.time));
+
+    data.matches.forEach((m, idx) => {
+        // Insert "Pause" button before new time block
         if(m.time !== lastTime) {
             lastTime = m.time;
-            const h = document.createElement('div');
-            h.className = 'round-header';
-            h.innerHTML = `<span>Kl ${m.time} (Runde ${m.round})</span>`;
-            list.appendChild(h);
+            const pauseBtn = document.createElement('div');
+            pauseBtn.innerHTML = `<button class="btn-pause-insert" onclick="insertPause('${m.time}')"><i class="fas fa-clock"></i> Sett inn pause før kl ${m.time} (Forskyv resten)</button>`;
+            con.appendChild(pauseBtn);
         }
         
-        const t1 = data.teams.find(t => t.id === m.t1);
-        const t2 = data.teams.find(t => t.id === m.t2);
+        const t1 = data.teams.find(t=>t.id===m.t1);
+        const t2 = data.teams.find(t=>t.id===m.t2);
         if(!t1 || !t2) return;
-
+        
         const div = document.createElement('div');
-        div.className = 'match-card';
+        div.className = `match-card ${m.done?'match-done':''}`;
         div.innerHTML = `
             <div class="match-info">
                 <span class="match-court">${m.court} - ${m.type}</span>
                 <span class="match-teams">${t1.name} vs ${t2.name}</span>
             </div>
+            <input type="time" class="match-time-input" value="${m.time}" onchange="updateMTime('${m.id}',this.value)">
             <div class="score-input">
-                <input type="number" value="${m.s1===null?'':m.s1}" onchange="updateScore('${m.id}', 's1', this.value)">
-                -
-                <input type="number" value="${m.s2===null?'':m.s2}" onchange="updateScore('${m.id}', 's2', this.value)">
+                <input type="number" value="${m.s1??''}" onchange="updScore('${m.id}','s1',this.value)"> - 
+                <input type="number" value="${m.s2??''}" onchange="updScore('${m.id}','s2',this.value)">
+                <button class="btn-text-red" onclick="delMatch('${m.id}')" style="margin-left:5px;">x</button>
             </div>
         `;
-        list.appendChild(div);
+        con.appendChild(div);
     });
 }
 
-function updateScore(mid, field, val) {
-    const m = data.matches.find(x => x.id === mid);
-    if(m) {
-        m[field] = val === '' ? null : parseInt(val);
-        m.done = (m.s1 !== null && m.s2 !== null);
-        saveLocal();
-        calcStandings();
-    }
-}
-
-function clearSchedule() {
-    if(confirm("Slette hele kampoppsettet og resultatene?")) {
-        data.matches = [];
-        data.finals = [];
+function insertPause(timeStr) {
+    const mins = prompt("Hvor mange minutter pause?", "15");
+    if(!mins) return;
+    const shift = parseInt(mins);
+    
+    // Find all matches starting at or after timeStr
+    let doShift = false;
+    let shiftsMade = 0;
+    
+    // We iterate matches sorted by time. 
+    // Matches at the same time must all shift.
+    // Logic: Convert all to minutes, shift, convert back.
+    
+    data.matches.forEach(m => {
+        if(m.time >= timeStr) {
+            let [h, min] = m.time.split(':').map(Number);
+            let d = new Date(); d.setHours(h, min + shift);
+            m.time = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            shiftsMade++;
+        }
+    });
+    
+    if(shiftsMade > 0) {
+        alert(`${shiftsMade} kamper ble forskjøvet med ${shift} minutter.`);
         saveLocal();
         renderSchedule();
-        calcStandings();
     }
 }
 
+function delMatch(id) {
+    if(confirm("Slette kamp?")) {
+        data.matches = data.matches.filter(m=>m.id!==id);
+        saveLocal(); renderSchedule(); calcStandings();
+    }
+}
+function updScore(id,f,v) {
+    const m = data.matches.find(x=>x.id==id);
+    m[f] = v===''?null:parseInt(v);
+    m.done = (m.s1!==null && m.s2!==null);
+    saveLocal(); calcStandings();
+}
+function updateMTime(id, v) {
+    const m = data.matches.find(x=>x.id==id); m.time = v; saveLocal();
+}
 function addManualMatch() {
-    const t1 = data.teams[0];
-    const m = {
-        id: Math.random().toString(36),
-        time: "12:00",
-        round: 99,
-        t1: t1.id, t2: t1.id,
-        court: "Ekstra", type: "Volleyball",
-        s1: null, s2: null, done: false
-    };
-    data.matches.push(m);
-    saveLocal();
-    renderSchedule();
+    const t = data.teams[0];
+    data.matches.push({ id:genId(), time:"12:00", t1:t.id, t2:t.id, court:"Manuell", type:"Ekstra", s1:null, s2:null, done:false });
+    saveLocal(); renderSchedule();
+}
+function clearSchedule() {
+    if(confirm("Slett alle kamper?")) { data.matches=[]; data.finals=[]; saveLocal(); renderSchedule(); calcStandings(); }
 }
 
 // --- STANDINGS ---
 function calcStandings() {
-    data.teams.forEach(t => {
-        t.points = 0;
-        t.stats = {p:0, w:0, d:0, l:0, gf:0, ga:0};
-    });
-    
-    data.matches.forEach(m => {
+    data.teams.forEach(t=>{ t.points=0; t.stats={p:0,w:0,d:0,l:0,gf:0,ga:0}; });
+    data.matches.forEach(m=>{
         if(m.done) {
-            const t1 = data.teams.find(t => t.id === m.t1);
-            const t2 = data.teams.find(t => t.id === m.t2);
-            if(t1 && t2) {
+            const t1 = data.teams.find(t=>t.id==m.t1);
+            const t2 = data.teams.find(t=>t.id==m.t2);
+            if(t1&&t2){
                 t1.stats.p++; t2.stats.p++;
-                t1.stats.gf += m.s1; t1.stats.ga += m.s2;
-                t2.stats.gf += m.s2; t2.stats.ga += m.s1;
-                
-                if(m.s1 > m.s2) { t1.points += 3; t1.stats.w++; t2.stats.l++; }
-                else if(m.s2 > m.s1) { t2.points += 3; t2.stats.w++; t1.stats.l++; }
-                else { t1.points+=1; t2.points+=1; t1.stats.d++; t2.stats.d++; }
+                t1.stats.gf+=m.s1; t1.stats.ga+=m.s2;
+                t2.stats.gf+=m.s2; t2.stats.ga+=m.s1;
+                if(m.s1>m.s2){ t1.points+=3; t1.stats.w++; t2.stats.l++; }
+                else if(m.s2>m.s1){ t2.points+=3; t2.stats.w++; t1.stats.l++; }
+                else { t1.points++; t2.points++; t1.stats.d++; t2.stats.d++; }
             }
         }
     });
-    
-    // Sort
-    data.teams.sort((a,b) => {
-        if(b.points !== a.points) return b.points - a.points;
-        const diffA = a.stats.gf - a.stats.ga;
-        const diffB = b.stats.gf - b.stats.ga;
-        if(diffB !== diffA) return diffB - diffA;
-        return b.stats.gf - a.stats.gf;
+    data.teams.sort((a,b)=>{
+        if(b.points!==a.points) return b.points-a.points;
+        const da = a.stats.gf-a.stats.ga; const db = b.stats.gf-b.stats.ga;
+        if(da!==db) return db-da;
+        return b.stats.gf-a.stats.gf;
     });
-    
-    renderStandings();
+    renderStandings(); updateFinalSel();
 }
-
 function renderStandings() {
-    const tb = document.getElementById('leaderboardBody');
-    tb.innerHTML = '';
-    data.teams.forEach((t, i) => {
-        const diff = t.stats.gf - t.stats.ga;
-        tb.innerHTML += `
-            <tr>
-                <td>${i+1}</td>
-                <td>${t.name}</td>
-                <td>${t.stats.p}</td>
-                <td>${t.stats.w}</td>
-                <td>${t.stats.d}</td>
-                <td>${t.stats.l}</td>
-                <td>${diff}</td>
-                <td><strong>${t.points}</strong></td>
-            </tr>
-        `;
+    const b = document.getElementById('leaderboardBody'); b.innerHTML='';
+    data.teams.forEach((t,i) => {
+        b.innerHTML += `<tr><td>${i+1}</td><td>${t.name}</td><td>${t.stats.p}</td><td>${t.stats.w}</td><td>${t.stats.d}</td><td>${t.stats.l}</td><td>${t.stats.gf-t.stats.ga}</td><td><strong>${t.points}</strong></td></tr>`;
     });
-    
-    // Update Final Selectors
-    updateFinalSelectors();
 }
 
-// --- FINALS ---
-function updateFinalSelectors() {
-    const s1 = document.getElementById('finalTeam1');
-    const s2 = document.getElementById('finalTeam2');
-    const opts = data.teams.map((t,i) => `<option value="${t.id}">${i+1}. ${t.name}</option>`).join('');
-    // Be smart, don't overwrite if user selected something else, unless empty
-    if(s1.innerHTML === '' || s1.innerHTML.includes('1. Plass')) {
-        s1.innerHTML = opts;
-        s2.innerHTML = opts;
-        if(data.teams.length > 1) s2.value = data.teams[1].id;
-    }
+// --- FINALS & CELEBRATION ---
+function updateFinalSel() {
+    const opt = data.teams.map((t,i)=>`<option value="${t.id}">${i+1}. ${t.name}</option>`).join('');
+    ['finalTeam1','finalTeam2'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(!el.value) el.innerHTML=opt; // Only update if empty to preserve choice
+        else {
+            // Keep selection but update labels if teams changed rank
+             const curr = el.value;
+             el.innerHTML = opt;
+             el.value = curr;
+        }
+    });
+    if(data.teams.length>1 && document.getElementById('finalTeam2').selectedIndex===0)
+        document.getElementById('finalTeam2').selectedIndex = 1;
 }
-
 function addFinal() {
-    const t1Id = parseInt(document.getElementById('finalTeam1').value);
-    const t2Id = parseInt(document.getElementById('finalTeam2').value);
-    const act = document.getElementById('finalActivity').value;
-    
-    const t1 = data.teams.find(t => t.id === t1Id);
-    const t2 = data.teams.find(t => t.id === t2Id);
-    
+    const t1 = data.teams.find(t=>t.id==document.getElementById('finalTeam1').value);
+    const t2 = data.teams.find(t=>t.id==document.getElementById('finalTeam2').value);
     data.finals.push({
-        id: Math.random().toString(36),
-        t1Name: t1 ? t1.name : "L1",
-        t2Name: t2 ? t2.name : "L2",
-        activity: act,
-        s1: null, s2: null
+        id: genId(), t1:t1.id, t2:t2.id, t1Name:t1.name, t2Name:t2.name,
+        type: document.getElementById('finalType').value,
+        act: document.getElementById('finalActivity').value,
+        s1:null, s2:null, done:false
     });
-    saveLocal();
-    renderFinals();
+    saveLocal(); renderFinals();
 }
-
 function renderFinals() {
-    const c = document.getElementById('finalsContainer');
-    c.innerHTML = '';
-    data.finals.forEach((f, idx) => {
-        const div = document.createElement('div');
-        div.className = 'final-card';
+    const c = document.getElementById('finalsContainer'); c.innerHTML='';
+    data.finals.forEach((f,i) => {
+        const cls = f.type==='Finale'?'gold-final':(f.type==='Bronse'?'bronze-final':'');
+        const div = document.createElement('div'); div.className = `final-card ${cls}`;
         div.innerHTML = `
-            <h4>${f.activity}</h4>
-            <div style="font-size:1.5rem; margin:10px;">
-                ${f.t1Name} vs ${f.t2Name}
-            </div>
+            <div class="final-type-badge">${f.type}</div>
+            <h4>${f.act}</h4>
+            <div style="font-size:1.5rem; margin:10px;">${f.t1Name} vs ${f.t2Name}</div>
             <div class="score-input" style="justify-content:center;">
-                <input type="number" placeholder="0"> - <input type="number" placeholder="0">
+                <input type="number" value="${f.s1??''}" onchange="updFinal('${f.id}','s1',this.value)"> - 
+                <input type="number" value="${f.s2??''}" onchange="updFinal('${f.id}','s2',this.value)">
             </div>
-            <button class="btn-small-red" style="margin-top:10px;" onclick="removeFinal(${idx})">Slett</button>
+            <button class="btn-text-red" onclick="delFinal(${i})">Slett</button>
         `;
         c.appendChild(div);
     });
 }
-
-function removeFinal(idx) {
-    data.finals.splice(idx, 1);
+function updFinal(id, f, v) {
+    const fin = data.finals.find(x=>x.id==id);
+    fin[f] = v===''?null:parseInt(v);
+    fin.done = (fin.s1!==null && fin.s2!==null);
     saveLocal();
-    renderFinals();
-}
-
-// --- SOUND & TIMER ---
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-let timerInt = null;
-let secondsLeft = 0;
-
-function updateTimerDisplay(sec) {
-    const m = Math.floor(sec / 60).toString().padStart(2,'0');
-    const s = (sec % 60).toString().padStart(2,'0');
-    document.getElementById('timerDisplay').innerText = `${m}:${s}`;
-}
-
-function startTimer() {
-    if(timerInt) return;
-    if(audioCtx.state === 'suspended') audioCtx.resume();
     
-    // Check if new start
-    const matchSec = data.settings.matchDuration * 60;
-    if(secondsLeft === 0 || secondsLeft === matchSec) {
-        secondsLeft = matchSec;
-        playSiren(2.5); // Start Siren
-    } else {
-        playTone(600, 0.1, 'sine'); // Resume blip
+    // Check for Winner Celebration
+    if(fin.done && fin.type === 'Finale') {
+        const wName = fin.s1 > fin.s2 ? fin.t1Name : (fin.s2 > fin.s1 ? fin.t2Name : "Uavgjort");
+        if(wName !== "Uavgjort") showWinner(wName);
     }
-
-    timerInt = setInterval(() => {
-        secondsLeft--;
-        updateTimerDisplay(secondsLeft);
-        
-        // Next match info logic could go here
-        
-        // End signals
-        if(secondsLeft <= 5 && secondsLeft > 0) playTone(800, 0.2, 'square');
-        if(secondsLeft === 0) {
-            pauseTimer();
-            playSiren(4.0); // END SIREN
-            secondsLeft = matchSec; // Ready for next
-        }
-    }, 1000);
 }
+function delFinal(i) { data.finals.splice(i,1); saveLocal(); renderFinals(); }
 
-function pauseTimer() {
-    clearInterval(timerInt);
-    timerInt = null;
+function showWinner(name) {
+    document.getElementById('winnerText').innerText = name;
+    document.getElementById('winnerOverlay').classList.remove('hidden');
+    playSiren(4); // Victory horn
 }
+function closeWinner() { document.getElementById('winnerOverlay').classList.add('hidden'); }
 
-function resetTimer() {
-    pauseTimer();
-    secondsLeft = data.settings.matchDuration * 60;
-    updateTimerDisplay(secondsLeft);
+// --- SOUND / UTILS ---
+function genId(){ return Math.random().toString(36).substr(2,9); }
+const ac = new (window.AudioContext||window.webkitAudioContext)();
+let tmr=null, sec=0;
+function updateTimerDisplay(s){
+    const m=Math.floor(s/60).toString().padStart(2,'0');
+    const ss=(s%60).toString().padStart(2,'0');
+    document.getElementById('timerDisplay').innerText=`${m}:${ss}`;
 }
-
-// LOUD HORN SYNTH
-function testSound() {
-    if(audioCtx.state === 'suspended') audioCtx.resume();
-    playSiren(2.0);
+function startTimer(){
+    if(tmr) return; if(ac.state==='suspended') ac.resume();
+    const dur = parseInt(data.settings.matchDuration)*60;
+    if(sec===0 || sec===dur) { sec=dur; playSiren(2.5); }
+    else playTone(600,0.1,'sine');
+    tmr=setInterval(()=>{
+        sec--; updateTimerDisplay(sec);
+        if(sec<=5 && sec>0) playTone(800,0.2,'square');
+        if(sec<=0) { clearInterval(tmr); tmr=null; playSiren(4); sec=dur; }
+    },1000);
 }
-
-function playTone(freq, dur, type) {
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    osc.type = type; osc.frequency.value = freq;
-    osc.connect(g); g.connect(audioCtx.destination);
-    g.gain.value = 0.2; osc.start(); osc.stop(audioCtx.currentTime + dur);
+function pauseTimer(){ clearInterval(tmr); tmr=null; }
+function resetTimer(){ pauseTimer(); sec=parseInt(data.settings.matchDuration)*60; updateTimerDisplay(sec); }
+function testSound(){ if(ac.state==='suspended') ac.resume(); playSiren(2); }
+function playTone(f,d,t){
+    const o=ac.createOscillator(); const g=ac.createGain();
+    o.type=t; o.frequency.value=f; o.connect(g); g.connect(ac.destination);
+    g.gain.value=0.2; o.start(); o.stop(ac.currentTime+d);
 }
-
-function playSiren(dur) {
-    const osc1 = audioCtx.createOscillator();
-    const osc2 = audioCtx.createOscillator(); // Detuned
-    const g = audioCtx.createGain();
-    
-    osc1.type = 'sawtooth'; osc1.frequency.value = 150;
-    osc2.type = 'sawtooth'; osc2.frequency.value = 155; // Dissonance
-    
-    osc1.connect(g); osc2.connect(g); g.connect(audioCtx.destination);
-    
-    const now = audioCtx.currentTime;
-    g.gain.setValueAtTime(0, now);
-    g.gain.linearRampToValueAtTime(1.0, now + 0.2); // Attack
-    g.gain.setValueAtTime(1.0, now + dur - 0.2);
-    g.gain.linearRampToValueAtTime(0, now + dur); // Release
-    
-    osc1.start(now); osc2.start(now);
-    osc1.stop(now + dur); osc2.stop(now + dur);
+function playSiren(d){
+    const o1=ac.createOscillator(), o2=ac.createOscillator(), g=ac.createGain();
+    o1.type='sawtooth'; o1.frequency.value=150;
+    o2.type='sawtooth'; o2.frequency.value=155;
+    o1.connect(g); o2.connect(g); g.connect(ac.destination);
+    const n=ac.currentTime;
+    g.gain.setValueAtTime(0,n); g.gain.linearRampToValueAtTime(1,n+0.2); g.gain.linearRampToValueAtTime(0,n+d);
+    o1.start(n); o2.start(n); o1.stop(n+d); o2.stop(n+d);
 }
