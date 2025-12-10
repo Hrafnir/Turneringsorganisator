@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Turneringssjefen v4.0</title>
+    <title>Turneringssjefen v5.0</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -14,19 +14,19 @@
         <div class="confetti"></div>
         <div class="trophy-container">
             <i class="fas fa-trophy trophy-icon"></i>
-            <h1>TURNERINGSVINNER</h1>
+            <h1>VINNEREN ER KÅRET!</h1>
             <h2 id="winnerText">LAG NAVN</h2>
-            <p>Klikk for å lukke</p>
+            <p>(Klikk for å avslutte)</p>
         </div>
     </div>
 
-    <!-- NAVIGATION -->
+    <!-- NAV -->
     <nav>
-        <div class="logo">🏆 Turneringssjefen <span class="version">v4.0</span></div>
+        <div class="logo">🏆 Turneringssjefen <span class="version">v5.0</span></div>
         <div class="file-controls">
-            <button onclick="saveToFile()" class="btn-small-blue"><i class="fas fa-download"></i> Lagre fil</button>
+            <button onclick="saveToFile()" class="btn-small-blue"><i class="fas fa-download"></i> Lagre</button>
             <label class="btn-small-blue">
-                <i class="fas fa-upload"></i> Åpne fil
+                <i class="fas fa-upload"></i> Last inn
                 <input type="file" id="fileInput" onchange="loadFromFile()" style="display:none;">
             </label>
         </div>
@@ -34,8 +34,8 @@
             <button onclick="showTab('setup')" class="active">1. Oppsett</button>
             <button onclick="showTab('arena')">2. Arena</button>
             <button onclick="showTab('draw')">3. Lag</button>
-            <button onclick="showTab('matches')">4. KAMPER</button>
-            <button onclick="showTab('standings')">5. Finale & Fest</button>
+            <button onclick="showTab('matches')">4. Kampplan</button>
+            <button onclick="showTab('finals')">5. FINALE-ARENA</button>
             <button onclick="confirmReset()" class="btn-small-red"><i class="fas fa-trash"></i></button>
         </div>
     </nav>
@@ -50,13 +50,12 @@
                     <button onclick="addClass()" class="btn-green">+</button>
                 </div>
             </div>
-
             <div class="setup-grid">
                 <div class="input-section">
                     <label>Velg klasse:</label>
                     <div id="classButtons" class="class-buttons"></div>
-                    <textarea id="pasteArea" placeholder="Lim inn navneliste..."></textarea>
-                    <button onclick="addStudents()" class="btn-primary block-btn">Legg til i liste</button>
+                    <textarea id="pasteArea" placeholder="Lim inn navn..."></textarea>
+                    <button onclick="addStudents()" class="btn-primary block-btn">Legg til</button>
                 </div>
                 <div class="list-section">
                     <div class="header-row">
@@ -75,13 +74,13 @@
     <!-- TAB 2: ARENA -->
     <div id="arena" class="tab-content">
         <div class="container">
-            <h2>2. Konfigurer Turnering</h2>
+            <h2>2. Tider og Baner</h2>
             <div class="config-grid">
                 <div class="config-box">
-                    <h3>⏰ Tider</h3>
-                    <div class="form-row"><label>Start:</label><input type="time" id="startTime" value="10:15"></div>
-                    <div class="form-row"><label>Finale start:</label><input type="time" id="finalsTime" value="14:00"></div>
-                    <div class="form-row"><label>Kamp (min):</label><input type="number" id="matchDuration" value="15"></div>
+                    <h3>⏰ Tidsplan</h3>
+                    <div class="form-row"><label>Starttid:</label><input type="time" id="startTime" value="10:15"></div>
+                    <div class="form-row"><label>Finalestart:</label><input type="time" id="finalsTime" value="14:00"></div>
+                    <div class="form-row"><label>Kamptid (min):</label><input type="number" id="matchDuration" value="15"></div>
                     <div class="form-row"><label>Pause (min):</label><input type="number" id="breakDuration" value="5"></div>
                 </div>
                 <div class="config-box">
@@ -99,78 +98,111 @@
     <!-- TAB 3: LAGTREKNING -->
     <div id="draw" class="tab-content">
         <div class="container">
-            <div class="header-row">
-                <h2>3. Lagtrekning</h2>
-                <div id="teamControls">
-                    <label>Strategi:</label>
-                    <select id="drawStrategy">
-                        <option value="balanced">⚖️ Jevn fordeling (Alle klasser)</option>
-                        <option value="random">🎲 Full Kaos (Helt tilfeldig)</option>
-                        <option value="ab_cd">🅰️🅱️ A+B lag / C+D lag</option>
-                    </select>
-                    <label>Antall lag:</label>
-                    <input type="number" id="teamCount" value="12" style="width:60px;">
-                    <button class="btn-primary" onclick="generateTeamsAnimated()">Generer</button>
-                    <button id="lockBtn" class="btn-yellow" onclick="toggleLockTeams()"><i class="fas fa-unlock"></i> Åpen</button>
-                </div>
-            </div>
+            <h2>3. Laginndeling</h2>
             
-            <p class="info-text">Tips: Sletter du et lag, fordeles spillerne automatisk til de andre lagene for å fylle opp.</p>
+            <div class="draw-controls">
+                <div class="draw-option">
+                    <label>Inndelingsmetode:</label>
+                    <select id="drawStrategy" onchange="toggleCustomMix()">
+                        <option value="balanced">⚖️ Perfekt Miks (Jevn fordeling)</option>
+                        <option value="class_based">🏫 Klassevis (Rene klasselag)</option>
+                        <option value="ab_cd">🅰️🅱️ Standard Base (A+B vs C+D)</option>
+                        <option value="custom">🛠️ Egendefinert Miks</option>
+                        <option value="random">🎲 Fullt Kaos</option>
+                    </select>
+                </div>
+                
+                <div id="customMixPanel" class="hidden custom-mix-panel">
+                    <p>Velg klasser til <strong>Pulje 1</strong> (Resten går til Pulje 2):</p>
+                    <div id="customClassCheckboxes" class="checkbox-group"></div>
+                </div>
+
+                <div class="draw-option">
+                    <label>Antall lag totalt:</label>
+                    <input type="number" id="teamCount" value="12" style="width:60px;">
+                </div>
+
+                <button class="btn-primary" onclick="generateTeams()">⚡ Generer Lag</button>
+                <button id="lockBtn" class="btn-yellow" onclick="toggleLockTeams()"><i class="fas fa-unlock"></i> Åpen</button>
+            </div>
+
             <div id="drawDisplay" class="draw-grid"></div>
             
             <div class="generate-section">
-                <button class="btn-spectacular" onclick="generateSchedule()">📅 Generer Kampoppsett</button>
+                <button class="btn-spectacular" onclick="generateSchedule()">📅 Lag Kampoppsett</button>
             </div>
         </div>
     </div>
 
-    <!-- TAB 4: KAMPER -->
+    <!-- TAB 4: KAMPPLAN -->
     <div id="matches" class="tab-content">
-        <div class="massive-timer-panel">
-            <div class="timer-display" id="timerDisplay">00:00</div>
-            <div class="timer-actions">
-                <button onclick="startTimer()" class="btn-ctrl start"><i class="fas fa-play"></i></button>
-                <button onclick="pauseTimer()" class="btn-ctrl pause"><i class="fas fa-pause"></i></button>
-                <button onclick="resetTimer()" class="btn-ctrl reset"><i class="fas fa-undo"></i></button>
-                <button onclick="testSound()" class="btn-ctrl sound"><i class="fas fa-bullhorn"></i></button>
-            </div>
+        <!-- SYSTEM CLOCK HEADER -->
+        <div class="system-clock-bar">
+            <div>Systemklokke: <span id="realTimeClock">--:--:--</span></div>
+            <div id="nextEventInfo">Neste hendelse: Ingen</div>
+            <button onclick="toggleSound()" id="soundToggleBtn">🔊 Lyd PÅ</button>
         </div>
 
         <div class="container">
             <div class="schedule-tools">
                 <button onclick="addManualMatch()" class="btn-text">+ Ekstra kamp</button>
-                <button onclick="clearSchedule()" class="btn-text-red">Slett oppsett</button>
+                <button onclick="clearSchedule()" class="btn-text-red">Slett alt</button>
             </div>
             <div id="scheduleContainer"></div>
         </div>
     </div>
 
-    <!-- TAB 5: TABELL & FINALE -->
-    <div id="standings" class="tab-content">
-        <div class="container">
-            <h2>Tabell</h2>
-            <table class="leaderboard-table">
-                <thead>
-                    <tr><th>#</th><th>Lag</th><th>K</th><th>S</th><th>U</th><th>T</th><th>MF</th><th>Poeng</th></tr>
-                </thead>
-                <tbody id="leaderboardBody"></tbody>
-            </table>
-            
-            <div class="finals-section">
-                <h2>🏆 Finalekonfigurator</h2>
-                <div class="final-setup">
-                    <label>Lag 1:</label><select id="finalTeam1"><option>1. Plass</option></select>
-                    <label>Lag 2:</label><select id="finalTeam2"><option>2. Plass</option></select>
-                    <label>Type:</label>
-                    <select id="finalType">
-                        <option value="Finale">Gullfinale 🏆</option>
-                        <option value="Bronse">Bronsefinale 🥉</option>
-                        <option value="Plassering">Plassering</option>
-                    </select>
-                    <label>Aktivitet:</label><input type="text" id="finalActivity" value="Volleyball">
-                    <button onclick="addFinal()" class="btn-primary">Opprett</button>
+    <!-- TAB 5: FINALE ARENA -->
+    <div id="finals" class="tab-content">
+        <div class="finals-layout">
+            <!-- Sidebar for setup -->
+            <div class="finals-sidebar">
+                <h3>Oppsett</h3>
+                <label>Lag 1:</label><select id="finalTeam1"></select>
+                <label>Lag 2:</label><select id="finalTeam2"></select>
+                <label>Type:</label><select id="finalType"><option>Gullfinale</option><option>Bronsefinale</option><option>Finale</option></select>
+                <label>Aktivitet:</label><input type="text" id="finalAct" value="Volleyball">
+                <button onclick="setActiveFinal()" class="btn-primary" style="width:100%; margin-top:10px;">Send til Storskjerm</button>
+                
+                <hr>
+                <h3>Leaderboard</h3>
+                <div class="mini-leaderboard">
+                    <table class="leaderboard-table small">
+                        <thead><tr><th>#</th><th>Lag</th><th>P</th></tr></thead>
+                        <tbody id="miniLeaderboard"></tbody>
+                    </table>
                 </div>
-                <div id="finalsContainer" class="finals-grid"></div>
+            </div>
+
+            <!-- Main Stage -->
+            <div class="finals-stage">
+                <div id="activeFinalDisplay">
+                    <h1 id="stageTitle">VENTER PÅ FINALE...</h1>
+                    <h2 id="stageActivity"></h2>
+                    
+                    <div class="stage-teams">
+                        <div class="stage-team">
+                            <span id="stageT1">Lag A</span>
+                            <input type="number" id="stageS1" value="0" onchange="updateStageScore()">
+                        </div>
+                        <div class="versus">VS</div>
+                        <div class="stage-team">
+                            <span id="stageT2">Lag B</span>
+                            <input type="number" id="stageS2" value="0" onchange="updateStageScore()">
+                        </div>
+                    </div>
+
+                    <div class="stage-timer">
+                        <div id="finalTimerDisplay">15:00</div>
+                        <div class="stage-controls">
+                            <button onclick="startFinalTimer()" class="btn-green">START</button>
+                            <button onclick="pauseFinalTimer()" class="btn-yellow">PAUSE</button>
+                            <button onclick="playHorn()" class="btn-grey">📣 HORN</button>
+                        </div>
+                    </div>
+
+                    <button class="btn-spectacular" style="margin-top:50px;" onclick="endTournament()">🏆 KÅR VINNER</button>
+                </div>
             </div>
         </div>
     </div>
