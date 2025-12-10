@@ -1,3 +1,4 @@
+/* Version: #7 */
 // --- DATA STORE ---
 let data = {
     title: "Turnering",
@@ -13,7 +14,7 @@ let data = {
 let soundEnabled = true;
 let wakeLock = null;
 
-// --- INIT (DOMContentLoaded ensures HTML is ready) ---
+// --- INIT ---
 document.addEventListener("DOMContentLoaded", function() {
     loadLocal();
     renderClassButtons();
@@ -26,12 +27,13 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 // --- CORE UTILS ---
-function saveLocal() { localStorage.setItem('ts_v6', JSON.stringify(data)); }
+function saveLocal() { localStorage.setItem('ts_v7', JSON.stringify(data)); }
 function loadLocal() {
-    const json = localStorage.getItem('ts_v6');
+    const json = localStorage.getItem('ts_v7');
     if(json) { data = {...data, ...JSON.parse(json)}; updateInputs(); }
     document.getElementById('displayTitle').innerText = data.title;
     document.getElementById('tournamentTitleInput').value = data.title;
+    document.getElementById('printTitle').innerText = data.title; // Update print title
 }
 function updateInputs() {
     ['startTime','finalsTime','matchDuration','breakDuration'].forEach(k => {
@@ -47,10 +49,11 @@ function toggleSound() {
 function updateTitle(val) {
     data.title = val;
     document.getElementById('displayTitle').innerText = val;
+    document.getElementById('printTitle').innerText = val;
     saveLocal();
 }
 
-// --- WAKE LOCK (No Sleep) ---
+// --- WAKE LOCK ---
 async function toggleWakeLock() {
     const btn = document.getElementById('wakeLockBtn');
     if(wakeLock !== null) {
@@ -60,9 +63,7 @@ async function toggleWakeLock() {
             wakeLock = await navigator.wakeLock.request('screen');
             btn.classList.add('active');
             btn.innerHTML='<i class="fas fa-eye"></i> Skjerm: PÅ (Låst)';
-        } catch(err) {
-            alert("Nettleseren din støtter kanskje ikke Wake Lock, eller du må ha HTTPS.");
-        }
+        } catch(err) { alert("Wake Lock feilet (krever HTTPS?)"); }
     }
 }
 
@@ -71,13 +72,9 @@ window.showTab = function(id) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
     document.getElementById(id).classList.add('active');
-    // Highlight active button logic
-    const btns = document.querySelectorAll('.tabs button');
-    if(id === 'setup') btns[0].classList.add('active');
-    if(id === 'arena') btns[1].classList.add('active');
-    if(id === 'draw') btns[2].classList.add('active');
-    if(id === 'matches') btns[3].classList.add('active');
-    if(id === 'finals') btns[4].classList.add('active');
+    // Sync nav
+    const map = {'setup':0,'arena':1,'draw':2,'matches':3,'finals':4};
+    if(map[id] !== undefined) document.querySelectorAll('.tabs button')[map[id]].classList.add('active');
 };
 
 // --- SETUP ---
@@ -114,12 +111,9 @@ window.addStudents = function() {
 window.renderStudentList = function() {
     const l = document.getElementById('studentList'); l.innerHTML = '';
     const query = document.getElementById('studentSearch').value.toLowerCase();
-    
     document.getElementById('studentCount').innerText = data.students.length;
-    
     let filtered = data.students.filter(s => s.name.toLowerCase().includes(query) || s.class.toLowerCase().includes(query));
     filtered.sort((a,b)=>a.class.localeCompare(b.class)||a.name.localeCompare(b.name));
-    
     filtered.forEach(s => {
         const d = document.createElement('div');
         d.className = `student-item ${s.present?'':'absent'}`;
@@ -146,53 +140,7 @@ window.delCourt = function(i) { data.courts.splice(i,1); saveLocal(); renderCour
     document.getElementById(id).addEventListener('change', e => { data.settings[id] = e.target.value; saveLocal(); });
 });
 
-// --- TIME RECALCULATION ---
-window.recalcFutureSchedule = function() {
-    if(data.matches.length === 0) return alert("Ingen kamper å oppdatere.");
-    
-    // Find all distinct times currently in schedule
-    let times = [...new Set(data.matches.map(m => m.time))].sort();
-    
-    // Ask user where to start update
-    // Simple logic: Find first match not marked done? Or just update ALL future times based on NOW?
-    // Let's check the current system time
-    const now = new Date();
-    const curTimeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    
-    // Filter times that are in the future
-    let futureTimes = times.filter(t => t >= curTimeStr);
-    
-    if(futureTimes.length === 0) return alert("Ingen fremtidige kamp-bolker funnet (basert på klokkeslett).");
-    
-    if(!confirm(`Vil du oppdatere tidene for ${futureTimes.length} kommende kamp-bolker basert på ${data.settings.matchDuration} min kamp + ${data.settings.breakDuration} min pause?`)) return;
-
-    const matchDur = parseInt(data.settings.matchDuration);
-    const breakDur = parseInt(data.settings.breakDuration);
-    const slotDur = matchDur + breakDur;
-
-    // Start calculation from the FIRST future time slot found
-    let [h, m] = futureTimes[0].split(':').map(Number);
-    let baseDate = new Date(); baseDate.setHours(h, m, 0);
-
-    // Update matches block by block
-    futureTimes.forEach(oldTime => {
-        const newTimeStr = baseDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        
-        // Find matches with oldTime and update
-        data.matches.forEach(match => {
-            if(match.time === oldTime) match.time = newTimeStr;
-        });
-
-        // Increment baseDate for next block
-        baseDate.setMinutes(baseDate.getMinutes() + slotDur);
-    });
-
-    saveLocal();
-    renderSchedule();
-    alert("Tider oppdatert!");
-};
-
-// --- TEAMS GENERATION ---
+// --- TEAMS GENERATION (FIXED BALANCING) ---
 window.toggleCustomMix = function() {
     const s = document.getElementById('drawStrategy').value;
     document.getElementById('customMixPanel').classList.toggle('hidden', s !== 'custom');
@@ -213,7 +161,34 @@ window.generateTeams = function() {
     
     data.teams = Array.from({length: count}, (_,i) => ({id:i+1, name:`Lag ${i+1}`, members:[], points:0, stats:{gf:0, ga:0, w:0, d:0, l:0}}));
 
-    if(strategy === 'random') {
+    if(strategy === 'balanced') {
+        // FIXED LOGIC: Deck of Cards approach
+        // 1. Bucket by class
+        let buckets = {};
+        data.classes.forEach(c => {
+            buckets[c] = pool.filter(s => s.class === c);
+            shuffle(buckets[c]);
+        });
+        
+        // 2. Create "Deck" (A, B, C, D, A, B, C, D...)
+        let deck = [];
+        let anyLeft = true;
+        while(anyLeft) {
+            anyLeft = false;
+            data.classes.forEach(c => {
+                if(buckets[c] && buckets[c].length > 0) {
+                    deck.push(buckets[c].pop());
+                    anyLeft = true;
+                }
+            });
+        }
+        
+        // 3. Deal to teams
+        deck.forEach((student, index) => {
+            data.teams[index % count].members.push(student);
+        });
+    }
+    else if(strategy === 'random') {
         shuffle(pool);
         pool.forEach((s,i) => data.teams[i % count].members.push(s));
     }
@@ -235,23 +210,8 @@ window.generateTeams = function() {
             currentTeam = endTeam;
         }
     }
-    else if(strategy === 'balanced') {
-        let byClass = {}; data.classes.forEach(c => byClass[c]=[]);
-        pool.forEach(s => { if(byClass[s.class]) byClass[s.class].push(s); });
-        for(let c in byClass) shuffle(byClass[c]);
-        let tIdx = 0; let anyLeft = true;
-        while(anyLeft) {
-            anyLeft = false;
-            for(let c of data.classes) {
-                if(byClass[c].length > 0) {
-                    data.teams[tIdx].members.push(byClass[c].pop());
-                    anyLeft = true;
-                }
-            }
-            tIdx = (tIdx + 1) % count;
-        }
-    }
     else {
+        // AB / CD or Custom
         let group1Classes = [];
         if(strategy === 'ab_cd') {
             const mid = Math.ceil(data.classes.length/2);
@@ -266,8 +226,10 @@ window.generateTeams = function() {
         shuffle(pool1); pool1.forEach((s,i) => teams1[i%teams1.length].members.push(s));
         shuffle(pool2); pool2.forEach((s,i) => teams2[i%teams2.length].members.push(s));
     }
+    
     saveLocal(); renderTeams();
 };
+
 window.renderTeams = function() {
     const d = document.getElementById('drawDisplay'); d.innerHTML = '';
     data.teams.forEach(t => {
@@ -283,11 +245,10 @@ window.renderTeams = function() {
 window.renameTeam = function(id,v) { data.teams.find(t=>t.id==id).name=v; saveLocal(); updateLeaderboard(); };
 window.toggleLockTeams = function() { data.teamsLocked = !data.teamsLocked; saveLocal(); renderTeams(); };
 
-// --- SCHEDULE ---
+// --- SCHEDULE & RECALC ---
 window.generateSchedule = function() {
     if(!data.teamsLocked) toggleLockTeams();
     if(data.courts.length === 0) return alert("Ingen baner!");
-    
     data.matches = [];
     let time = new Date(`2000-01-01T${data.settings.startTime}`);
     const endTime = new Date(`2000-01-01T${data.settings.finalsTime}`);
@@ -303,7 +264,6 @@ window.generateSchedule = function() {
         }
         tIds.splice(1, 0, tIds.pop());
     }
-    
     while(time < endTime && pairs.length > 0) {
         let active = [];
         data.courts.forEach(c => {
@@ -324,20 +284,36 @@ window.generateSchedule = function() {
     saveLocal(); renderSchedule();
 };
 
+window.recalcFutureSchedule = function() {
+    if(data.matches.length === 0) return alert("Ingen kamper.");
+    let times = [...new Set(data.matches.map(m => m.time))].sort();
+    const now = new Date();
+    const curTimeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    let futureTimes = times.filter(t => t >= curTimeStr);
+    
+    if(futureTimes.length === 0) return alert("Ingen fremtidige kamper.");
+    if(!confirm(`Oppdater tider for ${futureTimes.length} bolker?`)) return;
+
+    const slotDur = parseInt(data.settings.matchDuration) + parseInt(data.settings.breakDuration);
+    let [h, m] = futureTimes[0].split(':').map(Number);
+    let baseDate = new Date(); baseDate.setHours(h, m, 0);
+
+    futureTimes.forEach(oldTime => {
+        const newTimeStr = baseDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        data.matches.forEach(match => { if(match.time === oldTime) match.time = newTimeStr; });
+        baseDate.setMinutes(baseDate.getMinutes() + slotDur);
+    });
+    saveLocal(); renderSchedule();
+};
+
 window.renderSchedule = function() {
     const c = document.getElementById('scheduleContainer'); c.innerHTML = '';
     const groups = {};
     data.matches.sort((a,b)=>a.time.localeCompare(b.time));
     data.matches.forEach(m => { if(!groups[m.time]) groups[m.time]=[]; groups[m.time].push(m); });
-    
     for(let time in groups) {
         const blk = document.createElement('div'); blk.className = 'match-block';
-        blk.innerHTML = `
-            <div class="block-header">
-                <span class="block-time">Kl ${time}</span>
-                <button class="btn-text-red" onclick="delBlock('${time}')">Slett bolk</button>
-            </div>
-        `;
+        blk.innerHTML = `<div class="block-header"><span class="block-time">Kl ${time}</span><button class="btn-text-red" onclick="delBlock('${time}')">Slett bolk</button></div>`;
         groups[time].forEach(m => {
             const t1 = data.teams.find(t=>t.id==m.t1);
             const t2 = data.teams.find(t=>t.id==m.t2);
@@ -346,10 +322,7 @@ window.renderSchedule = function() {
             row.innerHTML = `
                 <div class="match-court-badge">${m.court}<br><small>${m.type}</small></div>
                 <div class="match-teams">${t1.name} vs ${t2.name}</div>
-                <div class="match-score">
-                    <input type="number" value="${m.s1??''}" onchange="updScore('${m.id}','s1',this.value)"> - 
-                    <input type="number" value="${m.s2??''}" onchange="updScore('${m.id}','s2',this.value)">
-                </div>
+                <div class="match-score"><input type="number" value="${m.s1??''}" onchange="updScore('${m.id}','s1',this.value)"> - <input type="number" value="${m.s2??''}" onchange="updScore('${m.id}','s2',this.value)"></div>
             `;
             blk.appendChild(row);
         });
@@ -360,7 +333,7 @@ window.updScore = function(id,f,v) {
     const m = data.matches.find(x=>x.id==id); m[f]=v===''?null:parseInt(v); 
     m.done = (m.s1!==null && m.s2!==null); saveLocal(); updateLeaderboard(); 
 };
-window.delBlock = function(time) { if(confirm("Slett alle kamper kl " + time +"?")) { data.matches=data.matches.filter(m=>m.time!==time); saveLocal(); renderSchedule(); } };
+window.delBlock = function(time) { if(confirm("Slett?")) { data.matches=data.matches.filter(m=>m.time!==time); saveLocal(); renderSchedule(); } };
 window.addManualMatch = function() {
     if(!data.teams.length) return;
     const t = data.teams[0];
@@ -386,13 +359,11 @@ window.updateLeaderboard = function() {
         }
     });
     data.teams.sort((a,b) => b.points-a.points || (b.stats.gf-b.stats.ga)-(a.stats.gf-a.stats.ga));
-    
     const s1 = document.getElementById('finalTeam1');
     const s2 = document.getElementById('finalTeam2');
     if(s1 && s2) {
         const html = data.teams.map((t,i) => `<option value="${t.id}">${i+1}. ${t.name} (${t.points}p)</option>`).join('');
         if(!s1.innerHTML || s1.innerHTML !== html) {
-             // Keep selection if possible
              const v1 = s1.value; const v2 = s2.value;
              s1.innerHTML = html; s2.innerHTML = html;
              if(v1) s1.value = v1; 
@@ -406,17 +377,14 @@ window.updateLeaderboard = function() {
 // --- SYSTEM CLOCK & ALERTS ---
 let lastAlertTime = "";
 const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-
 window.checkSystemTime = function() {
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
     const el = document.getElementById('realTimeClock');
     if(el) el.innerText = timeStr;
-    
     const shortTime = timeStr.substr(0,5);
     const nextMatch = data.matches.find(m => m.time > shortTime);
     const info = document.getElementById('nextEventInfo');
-    
     if(nextMatch && info) {
         info.innerText = `Neste: Kl ${nextMatch.time}`;
         const [h, m] = nextMatch.time.split(':').map(Number);
@@ -426,11 +394,8 @@ window.checkSystemTime = function() {
             lastAlertTime = nextMatch.time;
             if(soundEnabled) playHighAlert();
         }
-    } else if(info) {
-        info.innerText = "Ingen flere kamper";
-    }
+    } else if(info) info.innerText = "Ingen flere kamper";
 };
-
 function playHighAlert() {
     if(audioCtx.state === 'suspended') audioCtx.resume();
     const osc = audioCtx.createOscillator();
@@ -520,7 +485,7 @@ window.saveToFile = function() {
     const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `turnering_v6_${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `turnering_v7_${new Date().toISOString().slice(0,10)}.json`;
     a.click();
 };
 window.loadFromFile = function() {
@@ -533,4 +498,4 @@ window.loadFromFile = function() {
     };
     reader.readAsText(file);
 };
-window.confirmReset = function() { if(confirm("Slett ALT?")) { localStorage.removeItem('ts_v6'); location.reload(); } };
+window.confirmReset = function() { if(confirm("Slett ALT?")) { localStorage.removeItem('ts_v7'); location.reload(); } };
