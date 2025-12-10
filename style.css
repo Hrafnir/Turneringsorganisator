@@ -117,3 +117,14 @@ select, input[type=number] { padding: 8px; background: #111; border: 1px solid #
 .winner-overlay h1 { font-size: 3rem; color: white; margin: 0; }
 .winner-overlay h2 { font-size: 6rem; color: var(--accent); margin: 10px 0; text-transform: uppercase; }
 @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-20px); } 100% { transform: translateY(0px); } }
+
+.confetti div {
+    position: absolute;
+    width: 10px; height: 10px;
+    background: red;
+    top: -10px;
+    animation: fall 3s linear infinite;
+}
+@keyframes fall {
+    to { transform: translateY(100vh) rotate(720deg); }
+}
