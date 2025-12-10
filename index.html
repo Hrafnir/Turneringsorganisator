@@ -1,10 +1,10 @@
+<!-- Version: #7 -->
 <!DOCTYPE html>
 <html lang="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Turneringssjefen v6.0</title>
-    <!-- Hindrer 404 på favicon -->
+    <title>Turneringssjefen v7.0</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -22,16 +22,15 @@
         </div>
     </div>
 
-    <!-- NAV -->
-    <nav>
+    <!-- NAV (Skjules ved utskrift) -->
+    <nav class="no-print">
         <div class="logo-area">
-            <div class="logo">🏆 <span id="displayTitle">Turnering</span> <span class="version">v6.0</span></div>
-            <input type="text" id="tournamentTitleInput" placeholder="Skriv tittel her..." onchange="updateTitle(this.value)" class="title-input">
+            <div class="logo">🏆 <span id="displayTitle">Turnering</span> <span class="version">v7.0</span></div>
+            <input type="text" id="tournamentTitleInput" placeholder="Tittel..." onchange="updateTitle(this.value)" class="title-input">
         </div>
         
         <div class="nav-actions">
-            <button id="wakeLockBtn" onclick="toggleWakeLock()" class="btn-small-grey" title="Hindre at skjermen slukner"><i class="fas fa-eye"></i> Skjerm: Auto</button>
-            
+            <button id="wakeLockBtn" onclick="toggleWakeLock()" class="btn-small-grey" title="Hindre dvale"><i class="fas fa-eye"></i> Skjerm: Auto</button>
             <div class="file-controls">
                 <button onclick="saveToFile()" class="btn-small-blue"><i class="fas fa-download"></i> Lagre</button>
                 <label class="btn-small-blue">
@@ -52,7 +51,7 @@
     </nav>
 
     <!-- TAB 1: OPPSETT -->
-    <div id="setup" class="tab-content active">
+    <div id="setup" class="tab-content active no-print">
         <div class="container">
             <div class="header-split">
                 <h2>1. Klasser og Elever</h2>
@@ -71,7 +70,7 @@
                 <div class="list-section">
                     <div class="header-row">
                         <h3>Registrerte (<span id="studentCount">0</span>)</h3>
-                        <input type="text" id="studentSearch" placeholder="🔍 Søk etter navn..." onkeyup="renderStudentList()" class="search-input">
+                        <input type="text" id="studentSearch" placeholder="🔍 Søk..." onkeyup="renderStudentList()" class="search-input">
                         <button onclick="clearStudents()" class="btn-text-red">Slett alle</button>
                     </div>
                     <div id="studentList" class="student-grid"></div>
@@ -84,19 +83,17 @@
     </div>
 
     <!-- TAB 2: ARENA -->
-    <div id="arena" class="tab-content">
+    <div id="arena" class="tab-content no-print">
         <div class="container">
             <h2>2. Tider og Baner</h2>
             <div class="config-grid">
                 <div class="config-box">
-                    <h3>⏰ Tidsplan & Justering</h3>
-                    <p class="small-info">Endringer her påvirker "Oppdater fremtidige tider".</p>
+                    <h3>⏰ Tidsplan</h3>
                     <div class="form-row"><label>Starttid:</label><input type="time" id="startTime" value="10:15"></div>
                     <div class="form-row"><label>Finalestart:</label><input type="time" id="finalsTime" value="14:00"></div>
-                    <div class="form-row"><label>Kamptid (min):</label><input type="number" id="matchDuration" value="15"></div>
+                    <div class="form-row"><label>Kamp (min):</label><input type="number" id="matchDuration" value="15"></div>
                     <div class="form-row"><label>Pause (min):</label><input type="number" id="breakDuration" value="5"></div>
-                    
-                    <button class="btn-yellow-outline" onclick="recalcFutureSchedule()">🔄 Oppdater fremtidige tider basert på nye tall</button>
+                    <button class="btn-yellow-outline" onclick="recalcFutureSchedule()">🔄 Oppdater fremtidige tider</button>
                 </div>
                 <div class="config-box">
                     <h3>🏟️ Baner</h3>
@@ -110,12 +107,17 @@
         </div>
     </div>
 
-    <!-- TAB 3: LAGTREKNING -->
+    <!-- TAB 3: LAGTREKNING (PRINTABLE AREA) -->
     <div id="draw" class="tab-content">
-        <div class="container">
-            <h2>3. Laginndeling</h2>
+        <div class="container print-container">
+            <!-- Kun synlig ved print -->
+            <div class="print-header">
+                <h1 id="printTitle">Turneringslag</h1>
+            </div>
+
+            <h2 class="no-print">3. Laginndeling</h2>
             
-            <div class="draw-controls">
+            <div class="draw-controls no-print">
                 <div class="draw-option">
                     <label>Metode:</label>
                     <select id="drawStrategy" onchange="toggleCustomMix()">
@@ -138,19 +140,20 @@
                 </div>
 
                 <button class="btn-primary" onclick="generateTeams()">⚡ Generer</button>
+                <button class="btn-grey" onclick="window.print()"><i class="fas fa-print"></i> Skriv ut</button>
                 <button id="lockBtn" class="btn-yellow" onclick="toggleLockTeams()"><i class="fas fa-unlock"></i> Åpen</button>
             </div>
 
             <div id="drawDisplay" class="draw-grid"></div>
             
-            <div class="generate-section">
+            <div class="generate-section no-print">
                 <button class="btn-spectacular" onclick="generateSchedule()">📅 Generer Kampoppsett</button>
             </div>
         </div>
     </div>
 
     <!-- TAB 4: KAMPPLAN -->
-    <div id="matches" class="tab-content">
+    <div id="matches" class="tab-content no-print">
         <div class="system-clock-bar">
             <div><i class="far fa-clock"></i> <span id="realTimeClock">--:--:--</span></div>
             <div id="nextEventInfo">Neste: Ingen</div>
@@ -167,7 +170,7 @@
     </div>
 
     <!-- TAB 5: FINALE -->
-    <div id="finals" class="tab-content">
+    <div id="finals" class="tab-content no-print">
         <div class="finals-layout">
             <div class="finals-sidebar">
                 <h3>Finaleoppsett</h3>
@@ -215,7 +218,6 @@
         </div>
     </div>
 
-    <!-- SCRIPT LASTES HER FOR Å UNNGÅ 'UNDEFINED' FEIL -->
     <script src="script.js"></script>
 </body>
 </html>
