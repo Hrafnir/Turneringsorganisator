@@ -1,61 +1,87 @@
-// --- STATE MANAGEMENT ---
-let students = [];
-let teams = [];
-let matches = [];
-let teamsLocked = false;
-let settings = {
-    classes: ['10A', '10B', '10C', '10D'],
-    matchDuration: 15,
-    breakDuration: 20 // 20 min pause
+// --- DATA MODEL ---
+let data = {
+    classes: ["8A","8B","8C","8D","9A","9B","9C","9D","10A","10B","10C","10D"],
+    students: [],
+    courts: [
+        {id: 1, name: "Bane 1", type: "Volleyball"},
+        {id: 2, name: "Bane 2", type: "Volleyball"},
+        {id: 3, name: "Bane 3", type: "Stikkball"}
+    ],
+    teams: [],
+    matches: [],
+    finals: [],
+    settings: {
+        startTime: "10:15",
+        finalsTime: "14:00",
+        matchDuration: 15,
+        breakDuration: 5
+    },
+    teamsLocked: false
 };
 
-// AUTO-LOAD ON START
+// --- INIT & PERSISTENCE ---
 window.onload = function() {
-    loadData();
+    loadLocal();
+    renderClassButtons();
     renderStudentList();
-    if(teams.length > 0) renderTeams();
-    if(matches.length > 0) renderSchedule();
-    recalcLeaderboard();
-    
-    // Sett riktig tid på klokka hvis ikke kjører
-    document.getElementById('timerDisplay').innerText = formatTime(settings.matchDuration * 60);
+    renderCourts();
+    if(data.teams.length) renderTeams();
+    if(data.matches.length) renderSchedule();
+    if(data.finals.length) renderFinals();
+    updateTimerDisplay(data.settings.matchDuration * 60);
 };
 
-// --- PERSISTENCE ---
-function saveData() {
-    const data = { students, teams, matches, teamsLocked, settings };
-    localStorage.setItem('turneringData_v2', JSON.stringify(data));
-    
-    const status = document.getElementById('saveStatus');
-    status.style.opacity = '1';
-    setTimeout(() => status.style.opacity = '0.7', 1000);
+function saveLocal() {
+    localStorage.setItem('ts3_ultimate', JSON.stringify(data));
 }
 
-function loadData() {
-    const json = localStorage.getItem('turneringData_v2');
-    if (json) {
-        const data = JSON.parse(json);
-        students = data.students || [];
-        teams = data.teams || [];
-        matches = data.matches || [];
-        teamsLocked = data.teamsLocked || false;
-        settings = data.settings || settings;
-        
-        document.getElementById('matchDuration').value = settings.matchDuration;
-        document.getElementById('breakDuration').value = settings.breakDuration;
-        
-        // Oppdater lås-knapp
-        updateLockButton();
+function loadLocal() {
+    const json = localStorage.getItem('ts3_ultimate');
+    if(json) {
+        const parsed = JSON.parse(json);
+        // Merge for compatibility if new fields added later
+        data = { ...data, ...parsed };
+        // Update inputs
+        document.getElementById('startTime').value = data.settings.startTime;
+        document.getElementById('finalsTime').value = data.settings.finalsTime;
+        document.getElementById('matchDuration').value = data.settings.matchDuration;
+        document.getElementById('breakDuration').value = data.settings.breakDuration;
     }
 }
 
-function hardReset() {
-    localStorage.removeItem('turneringData_v2');
-    location.reload(); 
+// FILE I/O
+function saveToFile() {
+    const str = JSON.stringify(data, null, 2);
+    const blob = new Blob([str], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `turnering_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
 }
 
-function closeOverlay() {
-    document.getElementById('resetOverlay').classList.add('hidden');
+function loadFromFile() {
+    const input = document.getElementById('fileInput');
+    if(input.files.length === 0) return;
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            data = JSON.parse(e.target.result);
+            saveLocal();
+            location.reload();
+        } catch(err) {
+            alert("Kunne ikke lese fil. Er det en gyldig JSON?");
+        }
+    };
+    reader.readAsText(file);
+}
+
+function confirmReset() {
+    if(confirm("Dette sletter ALT (elever, oppsett, resultater). Er du sikker?")) {
+        localStorage.removeItem('ts3_ultimate');
+        location.reload();
+    }
 }
 
 // --- TABS ---
@@ -63,510 +89,638 @@ function showTab(id) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
     document.getElementById(id).classList.add('active');
-    // Highlight knapp logic kan legges her
+    // Highlight tab button?
 }
 
-// --- STUDENT LOGIC ---
-function addStudents() {
-    const cls = document.getElementById('classSelect').value;
-    const text = document.getElementById('pasteArea').value;
-    if (!text.trim()) return;
+// --- CLASS MANAGEMENT ---
+let selectedClass = "";
 
-    text.split('\n').map(n => n.trim()).filter(n => n).forEach(name => {
-        students.push({ id: generateId(), name, class: cls, present: true });
+function renderClassButtons() {
+    const div = document.getElementById('classButtons');
+    div.innerHTML = '';
+    data.classes.forEach(c => {
+        const btn = document.createElement('span');
+        btn.className = `class-btn ${selectedClass === c ? 'selected' : ''}`;
+        btn.innerHTML = `${c} <i class="fas fa-times del-cls" onclick="event.stopPropagation(); removeClass('${c}')"></i>`;
+        btn.onclick = () => { selectedClass = c; renderClassButtons(); };
+        div.appendChild(btn);
     });
+    // Select first if none
+    if(!selectedClass && data.classes.length > 0) {
+        selectedClass = data.classes[0];
+        renderClassButtons();
+    }
+}
 
+function addClass() {
+    const inp = document.getElementById('newClassInput');
+    const val = inp.value.trim().toUpperCase();
+    if(val && !data.classes.includes(val)) {
+        data.classes.push(val);
+        data.classes.sort();
+        saveLocal();
+        renderClassButtons();
+        inp.value = "";
+    }
+}
+
+function removeClass(c) {
+    if(confirm(`Slette klassen ${c}? Elever i klassen vil miste klassetilhørighet.`)) {
+        data.classes = data.classes.filter(x => x !== c);
+        if(selectedClass === c) selectedClass = "";
+        saveLocal();
+        renderClassButtons();
+    }
+}
+
+// --- STUDENTS ---
+function addStudents() {
+    if(!selectedClass) { alert("Velg en klasse først!"); return; }
+    const txt = document.getElementById('pasteArea').value;
+    txt.split('\n').forEach(line => {
+        const name = line.trim();
+        if(name) {
+            data.students.push({
+                id: Math.random().toString(36).substr(2,9),
+                name: name,
+                class: selectedClass,
+                present: true
+            });
+        }
+    });
     document.getElementById('pasteArea').value = "";
-    saveData();
+    saveLocal();
     renderStudentList();
 }
 
 function renderStudentList() {
-    const filter = document.getElementById('searchStudent').value.toLowerCase();
-    const container = document.getElementById('studentList');
-    container.innerHTML = '';
+    const list = document.getElementById('studentList');
+    list.innerHTML = '';
+    document.getElementById('studentCount').innerText = data.students.length;
+    
+    // Sort by Class then Name
+    data.students.sort((a,b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name));
 
-    students
-        .filter(s => s.name.toLowerCase().includes(filter))
-        .sort((a,b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name))
-        .forEach(s => {
-            const div = document.createElement('div');
-            div.className = `student-item ${s.present ? '' : 'absent'}`;
-            div.innerHTML = `
-                <span><b>${s.class}</b> ${s.name}</span>
-                <input type="checkbox" ${s.present ? 'checked' : ''} onchange="togglePresence('${s.id}')">
-            `;
-            container.appendChild(div);
-        });
+    data.students.forEach(s => {
+        const div = document.createElement('div');
+        div.className = `student-item ${s.present?'':'absent'}`;
+        div.innerHTML = `
+            <span><b>${s.class}</b> ${s.name}</span>
+            <input type="checkbox" ${s.present?'checked':''} onchange="togglePresence('${s.id}')">
+        `;
+        list.appendChild(div);
+    });
 }
 
 function togglePresence(id) {
-    const s = students.find(x => x.id == id);
-    if(s) { s.present = !s.present; saveData(); renderStudentList(); }
+    const s = data.students.find(x => x.id === id);
+    if(s) { s.present = !s.present; saveLocal(); renderStudentList(); }
 }
 
-// --- TEAMS LOGIC ---
+function clearStudents() {
+    if(confirm("Slette alle elever?")) {
+        data.students = [];
+        saveLocal();
+        renderStudentList();
+    }
+}
+
+// --- ARENA CONFIG ---
+function renderCourts() {
+    const list = document.getElementById('courtList');
+    list.innerHTML = '';
+    data.courts.forEach((c, idx) => {
+        const div = document.createElement('div');
+        div.className = 'court-item';
+        div.innerHTML = `
+            <span>#${idx+1}</span>
+            <input type="text" value="${c.name}" onchange="updateCourt(${idx}, 'name', this.value)" placeholder="Banenavn">
+            <input type="text" value="${c.type}" onchange="updateCourt(${idx}, 'type', this.value)" placeholder="Aktivitet (f.eks Volleyball)">
+            <button class="btn-small-red" onclick="removeCourt(${idx})">X</button>
+        `;
+        list.appendChild(div);
+    });
+}
+
+function addCourt() {
+    data.courts.push({id: Date.now(), name: `Bane ${data.courts.length+1}`, type: "Aktivitet"});
+    saveLocal();
+    renderCourts();
+}
+
+function updateCourt(idx, field, val) {
+    data.courts[idx][field] = val;
+    saveLocal();
+}
+
+function removeCourt(idx) {
+    data.courts.splice(idx, 1);
+    saveLocal();
+    renderCourts();
+}
+
+// Inputs listeners
+['startTime','finalsTime','matchDuration','breakDuration'].forEach(id => {
+    document.getElementById(id).addEventListener('change', (e) => {
+        data.settings[id] = e.target.type === 'number' ? parseInt(e.target.value) : e.target.value;
+        saveLocal();
+    });
+});
+
+// --- TEAM DRAW ---
 function generateTeamsAnimated() {
-    if(teamsLocked) { alert("Lagene er låst!"); return; }
+    if(data.teamsLocked) { alert("Lås opp lagene først."); return; }
     
     const count = parseInt(document.getElementById('teamCount').value);
-    // Basic distribution logic
-    let pool = students.filter(s => s.present);
-    // Shuffle pool
-    pool.sort(() => Math.random() - 0.5);
-
-    // Init teams
-    teams = Array.from({length: count}, (_, i) => ({
-        id: i+1,
-        name: `Lag ${i+1}`,
-        members: [],
-        points: 0,
-        stats: { w:0, d:0, l:0, played:0, gf:0, ga:0, diff:0 }
-    }));
-
-    // Distribute equally from classes (simplified robust version)
-    // First, group by class
-    let byClass = {};
-    settings.classes.forEach(c => byClass[c] = []);
-    pool.forEach(s => {
+    const presentStudents = data.students.filter(s => s.present);
+    
+    // Sort students by class to distribute evenly
+    const byClass = {};
+    data.classes.forEach(c => byClass[c] = []);
+    // Also catch students with deleted classes
+    presentStudents.forEach(s => {
         if(!byClass[s.class]) byClass[s.class] = [];
         byClass[s.class].push(s);
     });
 
-    let currentTeam = 0;
-    while(pool.length > 0) {
-        // Try to pick from a class that has students left
-        for(let c of settings.classes) {
+    // Shuffle each class
+    for(let c in byClass) byClass[c].sort(() => Math.random() - 0.5);
+
+    data.teams = Array.from({length: count}, (_, i) => ({
+        id: i+1, name: `Lag ${i+1}`, members: [], points:0, stats:{p:0, w:0, d:0, l:0, gf:0, ga:0}
+    }));
+
+    // Round robin deal
+    let teamIdx = 0;
+    let anyLeft = true;
+    while(anyLeft) {
+        anyLeft = false;
+        for(let c in byClass) {
             if(byClass[c].length > 0) {
-                teams[currentTeam].members.push(byClass[c].pop());
-                // Remove from pool ref for loop safety (not strictly needed but good)
-                pool.pop(); 
-                currentTeam = (currentTeam + 1) % count;
+                data.teams[teamIdx].members.push(byClass[c].pop());
+                teamIdx = (teamIdx + 1) % count;
+                anyLeft = true;
             }
         }
-        // If some classes are empty but pool still has weird leftovers (rare)
-        if(pool.length > 0 && Object.values(byClass).every(arr => arr.length === 0)) {
-             // Fallback
-             teams[currentTeam].members.push(pool.pop());
-             currentTeam = (currentTeam + 1) % count;
-        }
     }
-
-    saveData();
+    
+    saveLocal();
     renderTeams();
 }
-
-// DRAG AND DROP LOGIC FOR TEAMS
-let draggedStudent = null;
-let sourceTeamId = null;
 
 function renderTeams() {
     const container = document.getElementById('drawDisplay');
     container.innerHTML = '';
-    
-    teams.forEach(team => {
+    data.teams.forEach(t => {
         const div = document.createElement('div');
         div.className = 'team-card';
-        // Drop zone functionality
-        div.ondragover = (e) => e.preventDefault(); // Allow drop
-        div.ondrop = (e) => handleDrop(e, team.id);
+        div.ondragover = e => e.preventDefault();
+        div.ondrop = e => handleDrop(e, t.id);
 
-        let membersHtml = team.members.map(m => `
-            <div class="team-member" draggable="${!teamsLocked}" 
-                 ondragstart="handleDragStart(event, '${m.id}', ${team.id})">
+        const mems = t.members.map(m => `
+            <div class="team-member" draggable="${!data.teamsLocked}" ondragstart="handleDrag(event, '${m.id}', ${t.id})">
                 ${m.name} <small>(${m.class})</small>
             </div>
         `).join('');
-
-        div.innerHTML = `<h3>${team.name}</h3><div>${membersHtml}</div>`;
+        
+        div.innerHTML = `<h3><input value="${t.name}" onchange="renameTeam(${t.id}, this.value)" style="background:none;border:none;color:inherit;text-align:center;font-weight:bold;width:100%;"></h3><div>${mems}</div>`;
         container.appendChild(div);
     });
+    updateLockBtn();
 }
 
-function handleDragStart(e, studentId, teamId) {
-    if(teamsLocked) return;
-    draggedStudent = studentId;
-    sourceTeamId = teamId;
-    e.target.classList.add('dragging');
+function renameTeam(id, val) {
+    const t = data.teams.find(x => x.id === id);
+    if(t) t.name = val;
+    saveLocal();
 }
 
-function handleDrop(e, targetTeamId) {
+// Drag Drop Logic
+let dragSrc = null;
+function handleDrag(e, mId, tId) { dragSrc = {mId, tId}; e.target.classList.add('dragging'); }
+function handleDrop(e, targetTid) {
     e.preventDefault();
-    if(teamsLocked || !draggedStudent || sourceTeamId === targetTeamId) return;
-
-    // Move student logic
-    const sourceTeam = teams.find(t => t.id === sourceTeamId);
-    const targetTeam = teams.find(t => t.id === targetTeamId);
+    if(data.teamsLocked || !dragSrc) return;
+    if(dragSrc.tId === targetTid) return;
     
-    const sIndex = sourceTeam.members.findIndex(m => m.id == draggedStudent);
-    if(sIndex > -1) {
-        const s = sourceTeam.members.splice(sIndex, 1)[0];
-        targetTeam.members.push(s);
-        saveData();
+    const srcTeam = data.teams.find(t => t.id === dragSrc.tId);
+    const tgtTeam = data.teams.find(t => t.id === targetTid);
+    const mIdx = srcTeam.members.findIndex(m => m.id === dragSrc.mId);
+    
+    if(mIdx > -1) {
+        tgtTeam.members.push(srcTeam.members.splice(mIdx, 1)[0]);
+        saveLocal();
         renderTeams();
     }
-    draggedStudent = null;
+    dragSrc = null;
 }
 
 function toggleLockTeams() {
-    teamsLocked = !teamsLocked;
-    saveData();
-    updateLockButton();
-    renderTeams(); // Re-render to disable drag
+    data.teamsLocked = !data.teamsLocked;
+    saveLocal();
+    renderTeams();
 }
-
-function updateLockButton() {
+function updateLockBtn() {
     const btn = document.getElementById('lockBtn');
-    if(teamsLocked) {
-        btn.innerHTML = '<i class="fas fa-lock"></i> Lagene er LÅST (Klikk for å åpne)';
-        btn.classList.replace('btn-yellow', 'btn-red');
-    } else {
-        btn.innerHTML = '<i class="fas fa-unlock"></i> Lag er åpne (Klikk for å låse)';
-        btn.classList.replace('btn-red', 'btn-yellow');
-    }
+    btn.innerHTML = data.teamsLocked ? '<i class="fas fa-lock"></i> Låst' : '<i class="fas fa-unlock"></i> Åpen';
+    btn.className = data.teamsLocked ? 'btn-small-red' : 'btn-yellow';
 }
 
-// --- SCHEDULE LOGIC ---
+// --- SCHEDULER (THE BRAIN) ---
 function generateSchedule() {
-    if(!teamsLocked) {
-        if(!confirm("Lagene er ikke låst. Vil du låse dem og generere oppsett?")) return;
-        toggleLockTeams();
+    if(data.courts.length === 0) { alert("Du må definere minst én bane i 'Arena' fanen."); return; }
+    if(!data.teamsLocked) toggleLockTeams();
+    
+    data.matches = [];
+    
+    // Time Setup
+    let time = new Date();
+    const [sh, sm] = data.settings.startTime.split(':');
+    time.setHours(sh, sm, 0);
+    
+    const [fh, fm] = data.settings.finalsTime.split(':');
+    let finalsTime = new Date();
+    finalsTime.setHours(fh, fm, 0);
+
+    const matchMin = data.settings.matchDuration;
+    const breakMin = data.settings.breakDuration;
+    const roundDuration = matchMin + breakMin;
+
+    // Available minutes
+    const totalMinutes = (finalsTime - time) / 60000;
+    const maxRounds = Math.floor(totalMinutes / roundDuration);
+    
+    // Round Robin Generator
+    let teamIds = data.teams.map(t => t.id);
+    if(teamIds.length % 2 !== 0) teamIds.push(null); // Bye
+    
+    const rounds = [];
+    const numTeams = teamIds.length;
+    
+    // Generate all unique pairings (Circle Method)
+    // We need enough matches to fill the time. 
+    // Standard RR: numTeams - 1 rounds.
+    // If maxRounds > RR rounds, we repeat.
+    
+    let currentRotation = [...teamIds];
+    
+    for(let r=0; r < maxRounds; r++) {
+        let roundMatches = [];
+        
+        // Pairings for this rotation
+        for(let i=0; i<numTeams/2; i++) {
+            const t1 = currentRotation[i];
+            const t2 = currentRotation[numTeams - 1 - i];
+            if(t1 !== null && t2 !== null) {
+                roundMatches.push({t1, t2});
+            }
+        }
+        
+        // Rotate array
+        currentRotation.splice(1, 0, currentRotation.pop());
+        
+        rounds.push(roundMatches);
     }
     
-    matches = [];
-    const breakMins = parseInt(document.getElementById('breakDuration').value);
-    settings.breakDuration = breakMins;
-    const startTimeStr = document.getElementById('startTimeInput').value;
+    // ASSIGN TO COURTS
+    // For each round slot in time:
+    // Take the top X matches from the generated round matches where X is num courts.
+    // Wait, standard RR puts all teams in play at once. 
+    // If we have 12 teams (6 matches) but only 3 courts, we have to split the "RR Round" into 2 "Time Rounds".
     
-    let currentTime = new Date();
-    const [h, m] = startTimeStr.split(':');
-    currentTime.setHours(parseInt(h), parseInt(m), 0);
-
-    const half = Math.ceil(teams.length / 2);
-    const groupA = teams.slice(0, half);
-    const groupB = teams.slice(half);
-
-    // Helper: Add Round
-    const addRound = (activeTeams, roundNum, isMix) => {
-        let pairings = [];
+    // Flatten all pairings from the Loop logic
+    let allPairingsQueue = rounds.flat(); // This is just a stream of matches to be played
+    
+    // Create Time Slots
+    let roundCounter = 1;
+    let currentTime = new Date(time);
+    
+    while(currentTime < finalsTime && allPairingsQueue.length > 0) {
+        let activeMatches = [];
         
-        if(!isMix) {
-            // Internal group rotation
-            let t = [...activeTeams];
-            for(let i=0; i<roundNum; i++) t.push(t.shift()); // Rotate
-            pairings.push([t[0], t[1], 'Volleyball', 'Bane 1']);
-            pairings.push([t[2], t[3], 'Volleyball', 'Bane 2']);
-            pairings.push([t[4], t[5], 'Stikkball', 'Bane 3']);
-        } else {
-            // Mix Group A vs Group B
-            // Lag 1 (A) vs Lag 7 (B), etc. Rotate B.
-            let b = [...groupB];
-            for(let i=0; i<roundNum; i++) b.push(b.shift());
-            
-            pairings.push([groupA[0], b[0], 'Volleyball', 'Bane 1']);
-            pairings.push([groupA[1], b[1], 'Volleyball', 'Bane 2']);
-            pairings.push([groupA[2], b[2], 'Stikkball', 'Bane 3']);
-            // Note: In a 12 team setup, this leaves some teams out in a mix round unless we use 6 courts. 
-            // Assuming 3 courts active at a time based on request (2 VB, 1 SB).
-            // Logic implies 6 teams play, 6 wait.
-        }
-
+        // Fill Courts
+        data.courts.forEach(court => {
+            if(allPairingsQueue.length > 0) {
+                // To avoid teams playing twice in same timeslot?
+                // The queue comes from RR rounds, so usually distinct teams. 
+                // But if we split an RR round across time slots, we are fine.
+                // PROBLEM: If we take match 1 (Team A vs B) and match 2 (Team C vs A) -> A plays twice.
+                // SOLUTION: Check if teams are already playing in this timeslot.
+                
+                let matchIndex = -1;
+                for(let i=0; i < allPairingsQueue.length; i++) {
+                    const pair = allPairingsQueue[i];
+                    const t1Busy = activeMatches.some(m => m.t1 === pair.t1 || m.t2 === pair.t1);
+                    const t2Busy = activeMatches.some(m => m.t1 === pair.t2 || m.t2 === pair.t2);
+                    
+                    if(!t1Busy && !t2Busy) {
+                        matchIndex = i;
+                        break;
+                    }
+                }
+                
+                if(matchIndex > -1) {
+                    const pair = allPairingsQueue.splice(matchIndex, 1)[0];
+                    activeMatches.push({
+                        ...pair,
+                        courtName: court.name,
+                        courtType: court.type
+                    });
+                }
+            }
+        });
+        
+        if(activeMatches.length === 0) break; // No valid matches found
+        
+        // Add to schedule
         const timeStr = currentTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        
-        pairings.forEach(p => {
-            matches.push({
-                id: generateId(),
+        activeMatches.forEach(m => {
+            data.matches.push({
+                id: Math.random().toString(36).substr(2,9),
                 time: timeStr,
-                round: matches.length > 0 ? matches[matches.length-1].round + (pairings.indexOf(p)===0?1:0) : 1, // Crude round counter
-                t1: p[0].id, t2: p[1].id,
-                t1Name: p[0].name, t2Name: p[1].name,
-                type: p[2], court: p[3],
+                round: roundCounter,
+                t1: m.t1, t2: m.t2,
+                court: m.courtName, type: m.courtType,
                 s1: null, s2: null, done: false
             });
         });
-
-        // Add Time
-        currentTime.setMinutes(currentTime.getMinutes() + settings.matchDuration + settings.breakDuration);
-    };
-
-    // GENERATE ROUNDS
-    // 1-3: Group A plays
-    for(let i=0; i<3; i++) addRound(groupA, i, false);
+        
+        currentTime.setMinutes(currentTime.getMinutes() + roundDuration);
+        roundCounter++;
+    }
     
-    // 4-6: Group B plays
-    for(let i=0; i<3; i++) addRound(groupB, i, false);
-
-    // LONG BREAK Logic (Simulated by just adding time before next loop)
-    currentTime.setMinutes(currentTime.getMinutes() + 10); // Extra 10 min
-
-    // 7-9: MIX Rounds (A plays B)
-    // To ensure 6 plays, 6 wait: We pick 3 from A and 3 from B? 
-    // Or simplified: Just rotate rounds where A plays B.
-    // Let's generate 3 rounds where A play B.
-    for(let i=0; i<3; i++) addRound(null, i, true);
-
-    saveData();
+    saveLocal();
     renderSchedule();
     showTab('matches');
 }
 
 function renderSchedule() {
-    const container = document.getElementById('scheduleContainer');
-    container.innerHTML = '';
+    const list = document.getElementById('scheduleContainer');
+    list.innerHTML = '';
     
-    // Sort matches by time
-    matches.sort((a,b) => a.time.localeCompare(b.time));
-
-    let lastTime = '';
-
-    matches.forEach((m, index) => {
+    let lastTime = "";
+    data.matches.forEach(m => {
         if(m.time !== lastTime) {
             lastTime = m.time;
-            const header = document.createElement('div');
-            header.className = 'round-header';
-            header.innerHTML = `<span>Kl ${m.time}</span> <span style="font-size:0.8rem">Runde-start</span>`;
-            container.appendChild(header);
+            const h = document.createElement('div');
+            h.className = 'round-header';
+            h.innerHTML = `<span>Kl ${m.time} (Runde ${m.round})</span>`;
+            list.appendChild(h);
         }
+        
+        const t1 = data.teams.find(t => t.id === m.t1);
+        const t2 = data.teams.find(t => t.id === m.t2);
+        if(!t1 || !t2) return;
 
         const div = document.createElement('div');
-        div.className = 'match-row';
+        div.className = 'match-card';
         div.innerHTML = `
-            <div class="match-time">
-                <input type="time" value="${m.time}" onchange="updateMatchTime('${m.id}', this.value)">
+            <div class="match-info">
+                <span class="match-court">${m.court} - ${m.type}</span>
+                <span class="match-teams">${t1.name} vs ${t2.name}</span>
             </div>
-            <div class="match-teams">
-                <span style="font-weight:bold">${m.t1Name}</span> vs <span style="font-weight:bold">${m.t2Name}</span>
-                <span class="court-badge">${m.court}</span>
-                <span class="court-badge" style="background:${m.type=='Volleyball'?'#2980b9':'#e67e22'}">${m.type}</span>
-            </div>
-            <div class="match-score">
-                <input type="number" value="${m.s1!==null?m.s1:''}" onchange="updateScore('${m.id}', 's1', this.value)">
+            <div class="score-input">
+                <input type="number" value="${m.s1===null?'':m.s1}" onchange="updateScore('${m.id}', 's1', this.value)">
                 -
-                <input type="number" value="${m.s2!==null?m.s2:''}" onchange="updateScore('${m.id}', 's2', this.value)">
-                <button class="btn-red" onclick="deleteMatch('${m.id}')" style="margin-left:10px;"><i class="fas fa-times"></i></button>
+                <input type="number" value="${m.s2===null?'':m.s2}" onchange="updateScore('${m.id}', 's2', this.value)">
             </div>
         `;
-        container.appendChild(div);
+        list.appendChild(div);
     });
 }
 
-function addManualMatch() {
-    const t1 = teams[0] ? teams[0] : {id:0, name:'?'};
-    matches.push({
-        id: generateId(),
-        time: "12:00",
-        t1: t1.id, t2: t1.id,
-        t1Name: "Lag A", t2Name: "Lag B",
-        type: "Volleyball", court: "Manuell",
-        s1: null, s2: null, done: false
-    });
-    saveData();
-    renderSchedule();
-}
-
-function deleteMatch(id) {
-    if(confirm("Slette kamp?")) {
-        matches = matches.filter(m => m.id !== id);
-        saveData();
-        renderSchedule();
-    }
-}
-
-function updateMatchTime(id, val) {
-    const m = matches.find(x => x.id == id);
-    if(m) { m.time = val; saveData(); } // Note: This doesn't re-sort immediately to avoid jumping UI
-}
-
-function updateScore(id, field, val) {
-    const m = matches.find(x => x.id == id);
+function updateScore(mid, field, val) {
+    const m = data.matches.find(x => x.id === mid);
     if(m) {
         m[field] = val === '' ? null : parseInt(val);
         m.done = (m.s1 !== null && m.s2 !== null);
-        saveData();
-        recalcLeaderboard();
+        saveLocal();
+        calcStandings();
     }
 }
 
-// --- LEADERBOARD ---
-function recalcLeaderboard() {
-    teams.forEach(t => {
-        t.points = 0;
-        t.stats = { w:0, d:0, l:0, played:0, gf:0, ga:0, diff:0 };
-    });
+function clearSchedule() {
+    if(confirm("Slette hele kampoppsettet og resultatene?")) {
+        data.matches = [];
+        data.finals = [];
+        saveLocal();
+        renderSchedule();
+        calcStandings();
+    }
+}
 
-    matches.forEach(m => {
+function addManualMatch() {
+    const t1 = data.teams[0];
+    const m = {
+        id: Math.random().toString(36),
+        time: "12:00",
+        round: 99,
+        t1: t1.id, t2: t1.id,
+        court: "Ekstra", type: "Volleyball",
+        s1: null, s2: null, done: false
+    };
+    data.matches.push(m);
+    saveLocal();
+    renderSchedule();
+}
+
+// --- STANDINGS ---
+function calcStandings() {
+    data.teams.forEach(t => {
+        t.points = 0;
+        t.stats = {p:0, w:0, d:0, l:0, gf:0, ga:0};
+    });
+    
+    data.matches.forEach(m => {
         if(m.done) {
-            const t1 = teams.find(t => t.id == m.t1);
-            const t2 = teams.find(t => t.id == m.t2);
+            const t1 = data.teams.find(t => t.id === m.t1);
+            const t2 = data.teams.find(t => t.id === m.t2);
             if(t1 && t2) {
-                t1.stats.played++; t2.stats.played++;
+                t1.stats.p++; t2.stats.p++;
                 t1.stats.gf += m.s1; t1.stats.ga += m.s2;
                 t2.stats.gf += m.s2; t2.stats.ga += m.s1;
                 
-                if(m.s1 > m.s2) {
-                    t1.points += 3; t1.stats.w++; t2.stats.l++;
-                } else if(m.s2 > m.s1) {
-                    t2.points += 3; t2.stats.w++; t1.stats.l++;
-                } else {
-                    t1.points+=1; t2.points+=1; t1.stats.d++; t2.stats.d++;
-                }
+                if(m.s1 > m.s2) { t1.points += 3; t1.stats.w++; t2.stats.l++; }
+                else if(m.s2 > m.s1) { t2.points += 3; t2.stats.w++; t1.stats.l++; }
+                else { t1.points+=1; t2.points+=1; t1.stats.d++; t2.stats.d++; }
             }
         }
     });
-
-    // Calc Diff & Sort
-    teams.forEach(t => t.stats.diff = t.stats.gf - t.stats.ga);
     
-    // Sort: Points -> GoalDiff -> GoalsFor
-    teams.sort((a,b) => {
+    // Sort
+    data.teams.sort((a,b) => {
         if(b.points !== a.points) return b.points - a.points;
-        if(b.stats.diff !== a.stats.diff) return b.stats.diff - a.stats.diff;
+        const diffA = a.stats.gf - a.stats.ga;
+        const diffB = b.stats.gf - b.stats.ga;
+        if(diffB !== diffA) return diffB - diffA;
         return b.stats.gf - a.stats.gf;
     });
-
-    renderLeaderboard();
+    
+    renderStandings();
 }
 
-function renderLeaderboard() {
-    const tbody = document.getElementById('leaderboardBody');
-    tbody.innerHTML = '';
-    teams.forEach((t, i) => {
-        tbody.innerHTML += `
+function renderStandings() {
+    const tb = document.getElementById('leaderboardBody');
+    tb.innerHTML = '';
+    data.teams.forEach((t, i) => {
+        const diff = t.stats.gf - t.stats.ga;
+        tb.innerHTML += `
             <tr>
                 <td>${i+1}</td>
-                <td style="text-align:left; font-weight:bold;">${t.name}</td>
-                <td>${t.stats.played}</td>
+                <td>${t.name}</td>
+                <td>${t.stats.p}</td>
                 <td>${t.stats.w}</td>
                 <td>${t.stats.d}</td>
                 <td>${t.stats.l}</td>
-                <td>${t.stats.diff > 0 ? '+'+t.stats.diff : t.stats.diff}</td>
+                <td>${diff}</td>
                 <td><strong>${t.points}</strong></td>
             </tr>
         `;
     });
+    
+    // Update Final Selectors
+    updateFinalSelectors();
 }
 
-function generateFinals() {
-    if(teams.length < 4) return;
-    const box = document.getElementById('finalsContainer');
-    box.innerHTML = `
-        <div class="final-card">
-            <h3>🥉 Bronsefinale</h3>
-            <div style="font-size:1.5rem; margin:10px;">${teams[2].name} vs ${teams[3].name}</div>
-        </div>
-        <div class="final-card gold">
-            <h3>🏆 Gullfinale</h3>
-            <div style="font-size:1.5rem; margin:10px;">${teams[0].name} vs ${teams[1].name}</div>
-        </div>
-    `;
+// --- FINALS ---
+function updateFinalSelectors() {
+    const s1 = document.getElementById('finalTeam1');
+    const s2 = document.getElementById('finalTeam2');
+    const opts = data.teams.map((t,i) => `<option value="${t.id}">${i+1}. ${t.name}</option>`).join('');
+    // Be smart, don't overwrite if user selected something else, unless empty
+    if(s1.innerHTML === '' || s1.innerHTML.includes('1. Plass')) {
+        s1.innerHTML = opts;
+        s2.innerHTML = opts;
+        if(data.teams.length > 1) s2.value = data.teams[1].id;
+    }
 }
 
-// --- MASSIVE AUDIO & TIMER ---
-let timerInt = null;
-let timeLeft = 0;
-let isRunning = false;
+function addFinal() {
+    const t1Id = parseInt(document.getElementById('finalTeam1').value);
+    const t2Id = parseInt(document.getElementById('finalTeam2').value);
+    const act = document.getElementById('finalActivity').value;
+    
+    const t1 = data.teams.find(t => t.id === t1Id);
+    const t2 = data.teams.find(t => t.id === t2Id);
+    
+    data.finals.push({
+        id: Math.random().toString(36),
+        t1Name: t1 ? t1.name : "L1",
+        t2Name: t2 ? t2.name : "L2",
+        activity: act,
+        s1: null, s2: null
+    });
+    saveLocal();
+    renderFinals();
+}
+
+function renderFinals() {
+    const c = document.getElementById('finalsContainer');
+    c.innerHTML = '';
+    data.finals.forEach((f, idx) => {
+        const div = document.createElement('div');
+        div.className = 'final-card';
+        div.innerHTML = `
+            <h4>${f.activity}</h4>
+            <div style="font-size:1.5rem; margin:10px;">
+                ${f.t1Name} vs ${f.t2Name}
+            </div>
+            <div class="score-input" style="justify-content:center;">
+                <input type="number" placeholder="0"> - <input type="number" placeholder="0">
+            </div>
+            <button class="btn-small-red" style="margin-top:10px;" onclick="removeFinal(${idx})">Slett</button>
+        `;
+        c.appendChild(div);
+    });
+}
+
+function removeFinal(idx) {
+    data.finals.splice(idx, 1);
+    saveLocal();
+    renderFinals();
+}
+
+// --- SOUND & TIMER ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let timerInt = null;
+let secondsLeft = 0;
 
-function formatTime(sec) {
+function updateTimerDisplay(sec) {
     const m = Math.floor(sec / 60).toString().padStart(2,'0');
     const s = (sec % 60).toString().padStart(2,'0');
-    return `${m}:${s}`;
+    document.getElementById('timerDisplay').innerText = `${m}:${s}`;
 }
 
 function startTimer() {
-    if(isRunning) return;
-    if(timeLeft === 0) resetTimer();
-    
-    // Resume context if needed
+    if(timerInt) return;
     if(audioCtx.state === 'suspended') audioCtx.resume();
     
-    // START SIGNAL: LOUD HORN
-    if(timeLeft === parseInt(document.getElementById('matchDuration').value)*60) {
-        playHorn(2.0); // 2 sec horn
+    // Check if new start
+    const matchSec = data.settings.matchDuration * 60;
+    if(secondsLeft === 0 || secondsLeft === matchSec) {
+        secondsLeft = matchSec;
+        playSiren(2.5); // Start Siren
     } else {
-        // Just a short blip if resuming
-        playTone(600, 0.1, 'sine');
+        playTone(600, 0.1, 'sine'); // Resume blip
     }
 
-    isRunning = true;
     timerInt = setInterval(() => {
-        timeLeft--;
-        document.getElementById('timerDisplay').innerText = formatTime(timeLeft);
+        secondsLeft--;
+        updateTimerDisplay(secondsLeft);
         
-        // END SEQUENCE
-        if(timeLeft === 3) playTone(880, 0.2, 'square');
-        if(timeLeft === 2) playTone(880, 0.2, 'square');
-        if(timeLeft === 1) playTone(880, 0.2, 'square');
+        // Next match info logic could go here
         
-        if(timeLeft <= 0) {
+        // End signals
+        if(secondsLeft <= 5 && secondsLeft > 0) playTone(800, 0.2, 'square');
+        if(secondsLeft === 0) {
             pauseTimer();
-            document.getElementById('timerDisplay').innerText = "00:00";
-            // MASSIVE END SIGNAL
-            playHorn(4.0); // 4 sec horn
-            timeLeft = 0;
+            playSiren(4.0); // END SIREN
+            secondsLeft = matchSec; // Ready for next
         }
     }, 1000);
 }
 
 function pauseTimer() {
     clearInterval(timerInt);
-    isRunning = false;
+    timerInt = null;
 }
 
 function resetTimer() {
     pauseTimer();
-    const dur = parseInt(document.getElementById('matchDuration').value);
-    timeLeft = dur * 60;
-    document.getElementById('timerDisplay').innerText = formatTime(timeLeft);
+    secondsLeft = data.settings.matchDuration * 60;
+    updateTimerDisplay(secondsLeft);
 }
 
-// AUDIO SYNTHESIS
+// LOUD HORN SYNTH
 function testSound() {
     if(audioCtx.state === 'suspended') audioCtx.resume();
-    playHorn(2.0);
+    playSiren(2.0);
 }
 
-function playTone(freq, duration, type) {
+function playTone(freq, dur, type) {
     const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime); // volum safe
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
+    const g = audioCtx.createGain();
+    osc.type = type; osc.frequency.value = freq;
+    osc.connect(g); g.connect(audioCtx.destination);
+    g.gain.value = 0.2; osc.start(); osc.stop(audioCtx.currentTime + dur);
 }
 
-function playHorn(duration) {
-    // Creates a dissonant "Air Raid" / Hockey Horn sound
-    const fund = 150; // Fundamental frequency (low)
+function playSiren(dur) {
     const osc1 = audioCtx.createOscillator();
-    const osc2 = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-
-    osc1.type = 'sawtooth';
-    osc2.type = 'sawtooth';
-
-    osc1.frequency.value = fund;
-    osc2.frequency.value = fund * 1.02; // Slightly detuned for roughness
-
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    // High volume ramp
+    const osc2 = audioCtx.createOscillator(); // Detuned
+    const g = audioCtx.createGain();
+    
+    osc1.type = 'sawtooth'; osc1.frequency.value = 150;
+    osc2.type = 'sawtooth'; osc2.frequency.value = 155; // Dissonance
+    
+    osc1.connect(g); osc2.connect(g); g.connect(audioCtx.destination);
+    
     const now = audioCtx.currentTime;
-    gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.8, now + 0.1); // Attack
-    gain.gain.setValueAtTime(0.8, now + duration - 0.1);
-    gain.gain.linearRampToValueAtTime(0, now + duration); // Release
-
-    osc1.start(now);
-    osc2.start(now);
-    osc1.stop(now + duration);
-    osc2.stop(now + duration);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(1.0, now + 0.2); // Attack
+    g.gain.setValueAtTime(1.0, now + dur - 0.2);
+    g.gain.linearRampToValueAtTime(0, now + dur); // Release
+    
+    osc1.start(now); osc2.start(now);
+    osc1.stop(now + dur); osc2.stop(now + dur);
 }
-
-// Utils
-function generateId() { return '_' + Math.random().toString(36).substr(2, 9); }
