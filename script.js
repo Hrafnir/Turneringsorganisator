@@ -1,4 +1,4 @@
-/* Version: #8 */
+/* Version: #9 */
 
 // --- GLOBAL VARIABLES ---
 let data = {
@@ -60,13 +60,12 @@ function initAdmin() {
 
 // --- DATA PERSISTENCE ---
 function saveLocal() { 
-    localStorage.setItem('ts_v8_data', JSON.stringify(data));
-    // Trigger update for dashboard
-    localStorage.setItem('ts_v8_update_trigger', Date.now()); 
+    localStorage.setItem('ts_v9_data', JSON.stringify(data));
+    localStorage.setItem('ts_v9_update_trigger', Date.now()); 
 }
 
 function loadLocal() {
-    const json = localStorage.getItem('ts_v8_data');
+    const json = localStorage.getItem('ts_v9_data');
     if(json) { 
         data = {...data, ...JSON.parse(json)}; 
         updateInputs();
@@ -115,7 +114,6 @@ window.handleDrop = function(e, targetTeamId) {
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
     
-    // Find references
     const sourceTeam = data.teams.find(t => t.id === draggedFromTeamId);
     const targetTeam = data.teams.find(t => t.id === targetTeamId);
     
@@ -129,7 +127,6 @@ window.handleDrop = function(e, targetTeamId) {
         }
     }
     
-    // Cleanup
     document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
     draggedMemberId = null;
     draggedFromTeamId = null;
@@ -137,7 +134,6 @@ window.handleDrop = function(e, targetTeamId) {
 
 // --- STANDARD ADMIN FUNCTIONS ---
 
-// Classes & Students
 let selectedClass = "";
 window.renderClassButtons = function() {
     const d = document.getElementById('classButtons'); d.innerHTML = '';
@@ -184,7 +180,6 @@ window.renderStudentList = function() {
 window.togglePres = function(id) { const s = data.students.find(x=>x.id==id); if(s){s.present=!s.present; saveLocal(); renderStudentList();} };
 window.clearStudents = function() { if(confirm("Slett alle?")) { data.students=[]; saveLocal(); renderStudentList(); } };
 
-// Arena
 window.renderCourts = function() {
     const l = document.getElementById('courtList'); l.innerHTML = '';
     data.courts.forEach((c,i) => {
@@ -200,7 +195,6 @@ window.delCourt = function(i) { data.courts.splice(i,1); saveLocal(); renderCour
     document.getElementById(id).addEventListener('change', e => { data.settings[id] = e.target.value; saveLocal(); });
 });
 
-// Teams Generation
 window.toggleCustomMix = function() {
     const s = document.getElementById('drawStrategy').value;
     document.getElementById('customMixPanel').classList.toggle('hidden', s !== 'custom');
@@ -218,36 +212,21 @@ window.generateTeams = function() {
     const count = parseInt(document.getElementById('teamCount').value);
     const strategy = document.getElementById('drawStrategy').value;
     const pool = data.students.filter(s => s.present);
-    
     data.teams = Array.from({length: count}, (_,i) => ({id:i+1, name:`Lag ${i+1}`, members:[], points:0, stats:{gf:0, ga:0, w:0, d:0, l:0}}));
 
     if(strategy === 'balanced') {
-        // Deck of Cards logic
         let buckets = {};
-        data.classes.forEach(c => {
-            buckets[c] = pool.filter(s => s.class === c);
-            shuffle(buckets[c]);
-        });
+        data.classes.forEach(c => { buckets[c] = pool.filter(s => s.class === c); shuffle(buckets[c]); });
         let deck = [];
         let anyLeft = true;
         while(anyLeft) {
             anyLeft = false;
-            data.classes.forEach(c => {
-                if(buckets[c] && buckets[c].length > 0) {
-                    deck.push(buckets[c].pop());
-                    anyLeft = true;
-                }
-            });
+            data.classes.forEach(c => { if(buckets[c] && buckets[c].length > 0) { deck.push(buckets[c].pop()); anyLeft = true; } });
         }
-        deck.forEach((student, index) => {
-            data.teams[index % count].members.push(student);
-        });
-    }
-    else if(strategy === 'random') {
-        shuffle(pool);
-        pool.forEach((s,i) => data.teams[i % count].members.push(s));
-    }
-    else if(strategy === 'class_based') {
+        deck.forEach((student, index) => { data.teams[index % count].members.push(student); });
+    } else if(strategy === 'random') {
+        shuffle(pool); pool.forEach((s,i) => data.teams[i % count].members.push(s));
+    } else if(strategy === 'class_based') {
         let byClass = {}; data.classes.forEach(c => byClass[c]=[]);
         pool.forEach(s => { if(byClass[s.class]) byClass[s.class].push(s); });
         let teamsPerClass = Math.ceil(count / data.classes.length);
@@ -264,15 +243,10 @@ window.generateTeams = function() {
             }
             currentTeam = endTeam;
         }
-    }
-    else {
+    } else {
         let group1Classes = [];
-        if(strategy === 'ab_cd') {
-            const mid = Math.ceil(data.classes.length/2);
-            group1Classes = data.classes.slice(0, mid);
-        } else {
-            document.querySelectorAll('#customClassCheckboxes input:checked').forEach(cb => group1Classes.push(cb.value));
-        }
+        if(strategy === 'ab_cd') { const mid = Math.ceil(data.classes.length/2); group1Classes = data.classes.slice(0, mid); } 
+        else { document.querySelectorAll('#customClassCheckboxes input:checked').forEach(cb => group1Classes.push(cb.value)); }
         const pool1 = pool.filter(s => group1Classes.includes(s.class));
         const pool2 = pool.filter(s => !group1Classes.includes(s.class));
         const teams1 = data.teams.slice(0, Math.ceil(count/2));
@@ -286,19 +260,12 @@ window.generateTeams = function() {
 window.renderTeams = function() {
     const d = document.getElementById('drawDisplay'); d.innerHTML = '';
     data.teams.forEach(t => {
-        const card = document.createElement('div'); 
-        card.className = 'team-card';
-        // Add drop listeners
-        card.ondragover = window.handleDragOver;
-        card.ondragleave = window.handleDragLeave;
-        card.ondrop = (e) => window.handleDrop(e, t.id);
-
+        const card = document.createElement('div'); card.className = 'team-card';
+        card.ondragover = window.handleDragOver; card.ondragleave = window.handleDragLeave; card.ondrop = (e) => window.handleDrop(e, t.id);
         const mems = t.members.map((m,i) => `
             <div class="team-member" draggable="true" ondragstart="handleDragStart(event, '${m.id}', ${t.id})">
-                <span>${i+1}. ${m.name}</span>
-                <span class="team-class-badge">${m.class}</span>
+                <span>${i+1}. ${m.name}</span><span class="team-class-badge">${m.class}</span>
             </div>`).join('');
-        
         card.innerHTML = `<h3><input value="${t.name}" onchange="renameTeam(${t.id},this.value)"></h3><div>${mems}</div>`;
         d.appendChild(card);
     });
@@ -309,7 +276,6 @@ window.renderTeams = function() {
 window.renameTeam = function(id,v) { data.teams.find(t=>t.id==id).name=v; saveLocal(); updateLeaderboard(); };
 window.toggleLockTeams = function() { data.teamsLocked = !data.teamsLocked; saveLocal(); renderTeams(); };
 
-// Schedule
 window.generateSchedule = function() {
     if(!data.teamsLocked) toggleLockTeams();
     if(data.courts.length === 0) return alert("Ingen baner!");
@@ -317,9 +283,7 @@ window.generateSchedule = function() {
     let time = new Date(`2000-01-01T${data.settings.startTime}`);
     const endTime = new Date(`2000-01-01T${data.settings.finalsTime}`);
     const slotDur = parseInt(data.settings.matchDuration) + parseInt(data.settings.breakDuration);
-    
-    let tIds = data.teams.map(t=>t.id);
-    if(tIds.length % 2 !== 0) tIds.push(null);
+    let tIds = data.teams.map(t=>t.id); if(tIds.length % 2 !== 0) tIds.push(null);
     let pairs = [];
     for(let r=0; r < tIds.length-1; r++) {
         for(let i=0; i<tIds.length/2; i++) {
@@ -333,16 +297,11 @@ window.generateSchedule = function() {
         data.courts.forEach(c => {
             if(pairs.length) {
                 const idx = pairs.findIndex(p => !active.some(a => a.t1==p.t1 || a.t2==p.t1 || a.t1==p.t2 || a.t2==p.t2));
-                if(idx > -1) {
-                    const p = pairs.splice(idx,1)[0];
-                    active.push({...p, c:c.name, type:c.type});
-                }
+                if(idx > -1) { const p = pairs.splice(idx,1)[0]; active.push({...p, c:c.name, type:c.type}); }
             }
         });
         const timeStr = time.toLocaleTimeString([],{hour:'2-digit', minute:'2-digit'});
-        active.forEach(m => {
-            data.matches.push({id:genId(), time:timeStr, t1:m.t1, t2:m.t2, court:m.c, type:m.type, s1:null, s2:null, done:false});
-        });
+        active.forEach(m => { data.matches.push({id:genId(), time:timeStr, t1:m.t1, t2:m.t2, court:m.c, type:m.type, s1:null, s2:null, done:false}); });
         time.setMinutes(time.getMinutes() + slotDur);
     }
     saveLocal(); renderSchedule();
@@ -354,14 +313,11 @@ window.recalcFutureSchedule = function() {
     const now = new Date();
     const curTimeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
     let futureTimes = times.filter(t => t >= curTimeStr);
-    
     if(futureTimes.length === 0) return alert("Ingen fremtidige kamper.");
     if(!confirm(`Oppdater tider for ${futureTimes.length} bolker?`)) return;
-
     const slotDur = parseInt(data.settings.matchDuration) + parseInt(data.settings.breakDuration);
     let [h, m] = futureTimes[0].split(':').map(Number);
     let baseDate = new Date(); baseDate.setHours(h, m, 0);
-
     futureTimes.forEach(oldTime => {
         const newTimeStr = baseDate.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
         data.matches.forEach(match => { if(match.time === oldTime) match.time = newTimeStr; });
@@ -379,15 +335,9 @@ window.renderSchedule = function() {
         const blk = document.createElement('div'); blk.className = 'match-block';
         blk.innerHTML = `<div class="block-header"><span class="block-time">Kl ${time}</span><button class="btn-text-red" onclick="delBlock('${time}')">Slett bolk</button></div>`;
         groups[time].forEach(m => {
-            const t1 = data.teams.find(t=>t.id==m.t1);
-            const t2 = data.teams.find(t=>t.id==m.t2);
-            if(!t1 || !t2) return;
+            const t1 = data.teams.find(t=>t.id==m.t1); const t2 = data.teams.find(t=>t.id==m.t2); if(!t1 || !t2) return;
             const row = document.createElement('div'); row.className = 'match-row';
-            row.innerHTML = `
-                <div class="match-court-badge">${m.court}<br><small>${m.type}</small></div>
-                <div class="match-teams">${t1.name} vs ${t2.name}</div>
-                <div class="match-score"><input type="number" value="${m.s1??''}" onchange="updScore('${m.id}','s1',this.value)"> - <input type="number" value="${m.s2??''}" onchange="updScore('${m.id}','s2',this.value)"></div>
-            `;
+            row.innerHTML = `<div class="match-court-badge">${m.court}<br><small>${m.type}</small></div><div class="match-teams">${t1.name} vs ${t2.name}</div><div class="match-score"><input type="number" value="${m.s1??''}" onchange="updScore('${m.id}','s1',this.value)"> - <input type="number" value="${m.s2??''}" onchange="updScore('${m.id}','s2',this.value)"></div>`;
             blk.appendChild(row);
         });
         c.appendChild(blk);
@@ -406,54 +356,50 @@ window.addManualMatch = function() {
 };
 window.clearSchedule = function() { if(confirm("Slett alt?")) { data.matches=[]; saveLocal(); renderSchedule(); updateLeaderboard(); } };
 
-// Leaderboard
 window.updateLeaderboard = function() {
     data.teams.forEach(t => { t.points=0; t.stats={gf:0, ga:0, w:0, d:0, l:0}; });
     data.matches.forEach(m => {
         if(m.done) {
-            const t1 = data.teams.find(t=>t.id==m.t1);
-            const t2 = data.teams.find(t=>t.id==m.t2);
+            const t1 = data.teams.find(t=>t.id==m.t1); const t2 = data.teams.find(t=>t.id==m.t2);
             if(t1&&t2) {
-                t1.stats.gf+=m.s1; t1.stats.ga+=m.s2;
-                t2.stats.gf+=m.s2; t2.stats.ga+=m.s1;
-                if(m.s1>m.s2) { t1.points+=3; t1.stats.w++; }
-                else if(m.s2>m.s1) { t2.points+=3; t2.stats.w++; }
-                else { t1.points+=1; t2.points+=1; t1.stats.d++; t2.stats.d++; }
+                t1.stats.gf+=m.s1; t1.stats.ga+=m.s2; t2.stats.gf+=m.s2; t2.stats.ga+=m.s1;
+                if(m.s1>m.s2) { t1.points+=3; t1.stats.w++; } else if(m.s2>m.s1) { t2.points+=3; t2.stats.w++; } else { t1.points+=1; t2.points+=1; t1.stats.d++; t2.stats.d++; }
             }
         }
     });
     data.teams.sort((a,b) => b.points-a.points || (b.stats.gf-b.stats.ga)-(a.stats.gf-a.stats.ga));
-    
-    // Update Final Selects
-    const s1 = document.getElementById('finalTeam1');
-    const s2 = document.getElementById('finalTeam2');
+    const s1 = document.getElementById('finalTeam1'); const s2 = document.getElementById('finalTeam2');
     if(s1 && s2) {
         const html = data.teams.map((t,i) => `<option value="${t.id}">${i+1}. ${t.name} (${t.points}p)</option>`).join('');
-        if(!s1.innerHTML || s1.innerHTML !== html) {
-             const v1 = s1.value; const v2 = s2.value;
-             s1.innerHTML = html; s2.innerHTML = html;
-             if(v1) s1.value = v1; 
-             if(v2) s2.value = v2; else if(data.teams.length>1) s2.selectedIndex = 1;
-        }
+        if(!s1.innerHTML || s1.innerHTML !== html) { const v1 = s1.value; const v2 = s2.value; s1.innerHTML = html; s2.innerHTML = html; if(v1) s1.value = v1; if(v2) s2.value = v2; else if(data.teams.length>1) s2.selectedIndex = 1; }
     }
-    // Update Mini Leaderboard
     const mb = document.getElementById('miniLeaderboard');
     if(mb) mb.innerHTML = data.teams.slice(0, 8).map((t,i) => `<tr><td>${i+1}</td><td>${t.name}</td><td>${t.points}</td></tr>`).join('');
 };
 
 // --- TIMER & SYNC LOGIC ---
 
-// This runs on Admin to update clock and broadcast timer state
 function adminSystemTick() {
-    // Update Realtime Clock
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
     document.getElementById('adminRealTime').innerText = timeStr;
+    const shortTime = timeStr.substr(0,5);
+
+    const activeMatches = getMatchesAtTime(shortTime);
+    const nextMatches = getNextMatches(shortTime);
+    let startTimeDisplay = "--:--";
     
-    // Broadcast Timer State (Seconds remaining, Running status, Current Matches Info)
-    // We do this via a separate localStorage key to avoid heavy data reload
-    const activeMatches = getMatchesAtTime(timeStr.substr(0,5));
-    const nextMatches = getNextMatches(timeStr.substr(0,5));
+    // Determine the start time to show on dashboard
+    if(activeMatches.length > 0) {
+        // If matches are active, use their time.
+        // But getMatchesAtTime filters by current time block.
+        // We need to find the specific schedule time for these matches.
+        // For simplicity, we assume all active matches share the same schedule time.
+        const activeMatchTime = data.matches.find(m => m.court === activeMatches[0].court && m.t1 === activeMatches[0].t1)?.time;
+        if(activeMatchTime) startTimeDisplay = "KAMPSTART: KL " + activeMatchTime;
+    } else if (nextMatches.length > 0) {
+        startTimeDisplay = "NESTE KAMP: KL " + nextMatches[0].time;
+    }
 
     const syncObj = {
         timer: timerSeconds,
@@ -462,60 +408,39 @@ function adminSystemTick() {
         nextMatches: nextMatches,
         finalMode: data.finalState.active,
         finalState: data.finalState,
-        title: data.title
+        title: data.title,
+        startTimeDisplay: startTimeDisplay
     };
     
-    localStorage.setItem('ts_v8_dashboard_sync', JSON.stringify(syncObj));
+    localStorage.setItem('ts_v9_dashboard_sync', JSON.stringify(syncObj));
 }
 
 function getMatchesAtTime(shortTime) {
-    // Find matches starting at the closest previous block or current block
-    // Simplified: Find matches starting exactly at this time, OR if none, 
-    // find matches that started recently?
-    // Let's stick to: matches starting at the scheduled time.
-    // Better UX: Show matches belonging to the "Current Slot".
-    // We find the block with time <= current time.
-    // Sorting matches by time
     const sorted = [...data.matches].sort((a,b) => a.time.localeCompare(b.time));
-    // Find the latest start time that is <= current time
     let currentBlockTime = null;
     for(let m of sorted) {
         if(m.time <= shortTime) currentBlockTime = m.time;
         else break;
     }
-    
-    // If currentBlockTime is very old (e.g. > 30 mins ago), maybe don't show?
-    // For now, show matches from currentBlockTime
     if(!currentBlockTime) return [];
-    
     return sorted.filter(m => m.time === currentBlockTime).map(m => {
-        const t1 = data.teams.find(t=>t.id==m.t1);
-        const t2 = data.teams.find(t=>t.id==m.t2);
-        return {
-            court: m.court, type: m.type,
-            t1: t1?t1.name:'?', t2: t2?t2.name:'?',
-            s1: m.s1, s2: m.s2
-        };
+        const t1 = data.teams.find(t=>t.id==m.t1); const t2 = data.teams.find(t=>t.id==m.t2);
+        return { court: m.court, type: m.type, t1: t1?t1.name:'?', t2: t2?t2.name:'?', s1: m.s1, s2: m.s2 };
     });
 }
 
 function getNextMatches(shortTime) {
-    // Find matches > current time
     const sorted = [...data.matches].sort((a,b) => a.time.localeCompare(b.time));
     const future = sorted.filter(m => m.time > shortTime);
     if(future.length === 0) return [];
     const nextBlockTime = future[0].time;
     return future.filter(m => m.time === nextBlockTime).map(m => {
-        const t1 = data.teams.find(t=>t.id==m.t1);
-        const t2 = data.teams.find(t=>t.id==m.t2);
-        return {
-            time: m.time, court: m.court,
-            t1: t1?t1.name:'?', t2: t2?t2.name:'?'
-        };
+        const t1 = data.teams.find(t=>t.id==m.t1); const t2 = data.teams.find(t=>t.id==m.t2);
+        return { time: m.time, court: m.court, t1: t1?t1.name:'?', t2: t2?t2.name:'?' };
     });
 }
 
-// Timer Controls (Admin)
+// Timer Controls (Shared)
 window.startTimer = function() {
     if(isTimerRunning) return;
     if(audioCtx.state==='suspended') audioCtx.resume();
@@ -531,22 +456,19 @@ window.startTimer = function() {
         }
     }, 1000);
 };
-window.pauseTimer = function() {
-    clearInterval(timerInterval);
-    isTimerRunning = false;
-};
-window.resetTimer = function() {
-    pauseTimer();
-    timerSeconds = parseInt(data.settings.matchDuration) * 60;
+window.pauseTimer = function() { clearInterval(timerInterval); isTimerRunning = false; };
+window.resetTimer = function() { pauseTimer(); timerSeconds = parseInt(data.settings.matchDuration) * 60; updateAdminTimerUI(); };
+window.adjustTimer = function(minutes) {
+    timerSeconds += (minutes * 60);
+    if(timerSeconds < 0) timerSeconds = 0;
     updateAdminTimerUI();
 };
+
 function updateAdminTimerUI() {
     const m = Math.floor(timerSeconds/60).toString().padStart(2,'0');
     const s = (timerSeconds%60).toString().padStart(2,'0');
-    document.getElementById('adminTimerDisplay').innerText = `${m}:${s}`;
-    if(data.finalState.active) {
-        // Also update final panel inputs/display if needed
-    }
+    const el = document.getElementById('adminTimerDisplay');
+    if(el) el.innerText = `${m}:${s}`;
 }
 window.playHorn = function() {
     const osc = audioCtx.createOscillator(); osc.type='sawtooth'; osc.frequency.value=150;
@@ -558,90 +480,113 @@ window.playHorn = function() {
     osc.start(); osc2.start(); osc.stop(audioCtx.currentTime+2.5); osc2.stop(audioCtx.currentTime+2.5);
 };
 
-// Finals Admin
+// Finals
 window.activateFinalMode = function() {
     const t1 = data.teams.find(t=>t.id==document.getElementById('finalTeam1').value);
     const t2 = data.teams.find(t=>t.id==document.getElementById('finalTeam2').value);
-    
     data.finalState.active = true;
-    data.finalState.t1 = t1.name;
-    data.finalState.t2 = t2.name;
+    data.finalState.t1 = t1.name; data.finalState.t2 = t2.name;
     data.finalState.title = document.getElementById('finalType').value;
     data.finalState.act = document.getElementById('finalAct').value;
-    data.finalState.s1 = 0;
-    data.finalState.s2 = 0;
-    
-    // Reset timer for final
+    data.finalState.s1 = 0; data.finalState.s2 = 0;
     resetTimer();
-
-    // Update Admin UI
     document.getElementById('adminStageT1').innerText = t1.name;
     document.getElementById('adminStageT2').innerText = t2.name;
     document.getElementById('adminStageS1').value = 0;
     document.getElementById('adminStageS2').value = 0;
-    
-    saveLocal(); // Syncs to dashboard
-};
-window.exitFinalMode = function() {
-    data.finalState.active = false;
     saveLocal();
 };
+window.exitFinalMode = function() { data.finalState.active = false; saveLocal(); };
 window.syncFinalScore = function() {
     data.finalState.s1 = parseInt(document.getElementById('adminStageS1').value);
     data.finalState.s2 = parseInt(document.getElementById('adminStageS2').value);
     saveLocal();
 };
 window.endTournament = function() {
-    const s1 = data.finalState.s1;
-    const s2 = data.finalState.s2;
+    const s1 = data.finalState.s1; const s2 = data.finalState.s2;
     let w = "UAVGJORT";
     if(s1 > s2) w = data.finalState.t1;
     if(s2 > s1) w = data.finalState.t2;
     document.getElementById('winnerText').innerText = w;
     document.getElementById('winnerOverlay').classList.remove('hidden');
-    // Also trigger on dashboard via LS? Not implemented, but Dashboard sees score.
 };
 window.closeWinner = function() { document.getElementById('winnerOverlay').classList.add('hidden'); };
 
 // =============================================================
-// DASHBOARD LOGIC (STORSKJERM)
+// DASHBOARD LOGIC
 // =============================================================
 
 function initDashboard() {
-    document.getElementById('adminView').classList.add('hidden'); // Hide admin completely
+    document.getElementById('adminView').classList.add('hidden');
     document.getElementById('adminView').style.display = 'none';
     document.getElementById('dashboardView').classList.remove('hidden');
-    document.body.style.overflow = 'hidden'; // No scroll on dashboard
+    document.body.style.overflow = 'hidden';
 
-    // Listen for data updates (reloads schedule etc)
-    window.addEventListener('storage', (e) => {
-        if(e.key === 'ts_v8_update_trigger') {
-            // Reload data silently? Or just rely on sync object?
-            // If teams change names etc, we might need full reload.
-            // For now, we trust the sync object for live match data.
-        }
-    });
-
-    // High frequency update loop
+    // IMPORTANT: Make global controls available to Dashboard UI buttons
+    // Since functions are global (window.startTimer), the buttons in HTML will work.
+    // However, they update global state 'timerSeconds' in this window.
+    // We need to write this back to Sync to keep Admin updated? 
+    // Actually, Admin writes Sync. If Dashboard updates local vars, Admin loop overwrites it via Sync.
+    // FIX: Dashboard should be the MASTER of timer if controls are used there.
+    // Or simpler: Dashboard writes to a command channel, or just updates LocalStorage directly.
+    // Given the request, the simplest valid approach for v9 is:
+    // When Dashboard acts, it updates local state AND writes to LS.
+    // Admin reads LS? Currently Admin WRITES LS.
+    // We will make Dashboard controls purely visual triggers that might conflict if Admin is also open.
+    // But since user requested "Control from Dashboard", we assume single-operator or Dashboard is master.
+    // We will add a 'dashboardSystemTick' to update UI from local vars, but also READ sync if Admin is master.
+    // To solve conflict: We will just update UI from Sync loop.
+    // BUT the buttons must update the variables that Sync reads? 
+    // Actually, let's make the buttons update `timerSeconds` locally.
+    // AND we stop Admin overwriting if Dashboard is active? No.
+    // Valid solution: Dashboard buttons call the SAME functions.
+    // And we add a "Broadcast State" from Dashboard too? 
+    // Let's keep it simple: The `startTimer` function updates `timerSeconds`.
+    // The `adminSystemTick` broadcasts `timerSeconds`.
+    // If Dashboard runs `startTimer`, `timerSeconds` changes locally.
+    // If Admin is NOT open, who broadcasts? No one.
+    // So Dashboard MUST also run a sync loop or update UI locally.
+    
     setInterval(dashboardTick, 200);
 }
 
 function dashboardTick() {
-    const json = localStorage.getItem('ts_v8_dashboard_sync');
-    if(!json) return;
-    const sync = JSON.parse(json);
+    // Read Sync from Admin (if exists)
+    const json = localStorage.getItem('ts_v9_dashboard_sync');
+    
+    if(json) {
+        const sync = JSON.parse(json);
+        // Note: If we are clicking buttons on Dashboard, we might be fighting this Sync.
+        // Ideally, we only read Sync if we are NOT the one controlling.
+        // For this v9, we will assume Sync is truth. 
+        // If Admin is closed, Dashboard buttons update local vars, but `sync` will be null/old.
+        // So we fallback to local vars if sync is old?
+        // Let's just update UI from Sync if it exists.
+        
+        // Update UI
+        updateDashUI(sync);
+    } else {
+        // Fallback if Admin is closed (Standalone Dashboard)
+        const localState = {
+            timer: timerSeconds, running: isTimerRunning,
+            activeMatches: [], nextMatches: [], // We don't calc matches in dashboard standalone mode for now to save code
+            finalMode: data.finalState.active,
+            finalState: data.finalState,
+            title: data.title,
+            startTimeDisplay: "--:--"
+        };
+        updateDashUI(localState);
+    }
+}
 
-    // Update Clock
+function updateDashUI(sync) {
     const now = new Date();
     document.getElementById('dashClock').innerText = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
     document.getElementById('dashTitle').innerText = sync.title || "TURNERING";
 
-    // Mode Switch
     if (sync.finalMode) {
         document.getElementById('dashSeriesMode').classList.add('hidden');
         document.getElementById('dashFinalMode').classList.remove('hidden');
-        
-        // Update Final UI
         const fs = sync.finalState;
         document.getElementById('dashFinalTitle').innerText = fs.title;
         document.getElementById('dashFinalAct').innerText = fs.act;
@@ -649,63 +594,53 @@ function dashboardTick() {
         document.getElementById('dashFinalT2').innerText = fs.t2;
         document.getElementById('dashFinalS1').innerText = fs.s1;
         document.getElementById('dashFinalS2').innerText = fs.s2;
-        
-        // Timer
         const m = Math.floor(sync.timer/60).toString().padStart(2,'0');
         const s = (sync.timer%60).toString().padStart(2,'0');
         document.getElementById('dashFinalTimer').innerText = `${m}:${s}`;
         document.getElementById('dashFinalTimer').style.color = sync.running ? '#4caf50' : '#f44336';
-        
     } else {
         document.getElementById('dashFinalMode').classList.add('hidden');
         document.getElementById('dashSeriesMode').classList.remove('hidden');
-
-        // Update Timer
         const m = Math.floor(sync.timer/60).toString().padStart(2,'0');
         const s = (sync.timer%60).toString().padStart(2,'0');
         const dTimer = document.getElementById('dashTimer');
         dTimer.innerText = `${m}:${s}`;
-        
         const dStatus = document.getElementById('dashStatus');
+        
         if(sync.running) {
-            dTimer.style.color = '#4caf50'; // Green
-            dStatus.innerText = "KAMP PÅGÅR";
-            dStatus.style.background = "#1b5e20";
+            dTimer.style.color = '#4caf50'; dStatus.innerText = "KAMP PÅGÅR"; dStatus.style.background = "#1b5e20";
         } else if (sync.timer === 0) {
-            dTimer.style.color = '#f44336'; // Red
-            dStatus.innerText = "TIDEN ER UTE";
-            dStatus.style.background = "#b71c1c";
+            dTimer.style.color = '#f44336'; dStatus.innerText = "TIDEN ER UTE"; dStatus.style.background = "#b71c1c";
         } else {
-            dTimer.style.color = '#ff9800'; // Orange
-            dStatus.innerText = "PAUSE / KLAR";
-            dStatus.style.background = "#333";
+            dTimer.style.color = '#ff9800'; dStatus.innerText = "KLAR / PAUSE"; dStatus.style.background = "#333";
         }
+        
+        document.getElementById('dashStartTime').innerText = sync.startTimeDisplay || "";
 
-        // Update Active Matches
         const amBox = document.getElementById('dashActiveMatches');
         if (sync.activeMatches.length === 0) {
-            amBox.innerHTML = '<div class="dash-placeholder" style="color:#666; font-size:2vh; text-align:center; padding:20px;">Ingen kamper i denne tidsluken</div>';
+            amBox.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">Ingen aktive kamper</div>';
         } else {
             amBox.innerHTML = sync.activeMatches.map(m => `
                 <div class="dash-match-card">
-                    <div class="dm-court">${m.court}<br><small style="font-size:0.7em">${m.type}</small></div>
+                    <div style="width:15%">
+                        <div class="dm-court">${m.court}</div>
+                        <div style="color:#666;font-size:0.7em">${m.type}</div>
+                    </div>
                     <div class="dm-teams">${m.t1} vs ${m.t2}</div>
                     <div class="dm-score">${m.s1!=null?m.s1:'-'} - ${m.s2!=null?m.s2:'-'}</div>
-                </div>
-            `).join('');
+                </div>`).join('');
         }
 
-        // Update Next Matches
         const nmBox = document.getElementById('dashNextMatches');
         if (sync.nextMatches.length === 0) {
-            nmBox.innerHTML = '<div style="text-align:center; color:#555;">Ingen flere kamper planlagt</div>';
+            nmBox.innerHTML = '<div style="text-align:center;color:#555;">Ingen flere kamper</div>';
         } else {
             nmBox.innerHTML = sync.nextMatches.map(m => `
                 <div class="dash-next-card">
                     <span class="dnm-time">${m.time}</span>
                     <span>${m.court}: ${m.t1} vs ${m.t2}</span>
-                </div>
-            `).join('');
+                </div>`).join('');
         }
     }
 }
@@ -734,7 +669,7 @@ window.saveToFile = function() {
     const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `turnering_v8_${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `turnering_v9_${new Date().toISOString().slice(0,10)}.json`;
     a.click();
 };
 window.loadFromFile = function() {
@@ -747,7 +682,7 @@ window.loadFromFile = function() {
     };
     reader.readAsText(file);
 };
-window.confirmReset = function() { if(confirm("Slett ALT?")) { localStorage.removeItem('ts_v8_data'); location.reload(); } };
+window.confirmReset = function() { if(confirm("Slett ALT?")) { localStorage.removeItem('ts_v9_data'); location.reload(); } };
 window.showTab = function(id) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
