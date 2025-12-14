@@ -1,4 +1,4 @@
-/* Version: #13 */
+/* Version: #14 */
 
 // =============================================================
 // 1. GLOBAL DATA & STATE
@@ -53,7 +53,6 @@ let dashFontSizeVW = 18;
 // 2. INITIALIZATION
 // =============================================================
 document.addEventListener("DOMContentLoaded", () => {
-    // Detect mode based on URL parameter
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('mode') === 'dashboard') {
         initDashboard();
@@ -88,12 +87,12 @@ function initAdmin() {
 
 // --- PERSISTENCE ---
 window.saveLocal = function() {
-    localStorage.setItem('ts_v13_data', JSON.stringify(window.data));
-    localStorage.setItem('ts_v13_update_trigger', Date.now());
+    localStorage.setItem('ts_v14_data', JSON.stringify(window.data));
+    localStorage.setItem('ts_v14_update_trigger', Date.now());
 };
 
 function loadLocal() {
-    const json = localStorage.getItem('ts_v13_data');
+    const json = localStorage.getItem('ts_v14_data');
     if (json) {
         try {
             const parsed = JSON.parse(json);
@@ -244,7 +243,6 @@ window.addCourt = function() {
 window.updCourt = function(i, f, v) { window.data.courts[i][f] = v; saveLocal(); };
 window.delCourt = function(i) { window.data.courts.splice(i, 1); saveLocal(); renderCourts(); };
 
-// Settings Listeners
 ['startTime', 'finalsTime', 'matchDuration', 'breakDuration'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', e => {
@@ -765,7 +763,7 @@ function adminSystemTick() {
         startTimeDisplay: startTimeDisplay
     };
 
-    localStorage.setItem('ts_v13_dashboard_sync', JSON.stringify(syncObj));
+    localStorage.setItem('ts_v14_dashboard_sync', JSON.stringify(syncObj));
 }
 
 function getMatchesAtTime(shortTime) {
@@ -876,7 +874,7 @@ window.resizeDashText = function(dir) {
 };
 
 function dashboardTick() {
-    const json = localStorage.getItem('ts_v13_dashboard_sync');
+    const json = localStorage.getItem('ts_v14_dashboard_sync');
     if (json) {
         const sync = JSON.parse(json);
         updateDashUI(sync);
@@ -996,7 +994,7 @@ window.saveToFile = function() {
     const blob = new Blob([JSON.stringify(window.data, null, 2)], { type: "application/json" });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `turnering_v13_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `turnering_v14_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
 };
 
@@ -1016,7 +1014,7 @@ window.loadFromFile = function() {
 
 window.confirmReset = function() {
     if (confirm("Slett ALT? Dette kan ikke angres.")) {
-        localStorage.removeItem('ts_v13_data');
+        localStorage.removeItem('ts_v14_data');
         location.reload();
     }
 };
@@ -1032,4 +1030,4 @@ window.showTab = function(id) {
     }
 };
 
-/* Version: #13 */
+/* Version: #14 */
