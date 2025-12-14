@@ -1,4 +1,4 @@
-/* Version: #14 */
+/* Version: #15 */
 
 // =============================================================
 // 1. GLOBAL DATA & STATE
@@ -87,12 +87,12 @@ function initAdmin() {
 
 // --- PERSISTENCE ---
 window.saveLocal = function() {
-    localStorage.setItem('ts_v14_data', JSON.stringify(window.data));
-    localStorage.setItem('ts_v14_update_trigger', Date.now());
+    localStorage.setItem('ts_v15_data', JSON.stringify(window.data));
+    localStorage.setItem('ts_v15_update_trigger', Date.now());
 };
 
 function loadLocal() {
-    const json = localStorage.getItem('ts_v14_data');
+    const json = localStorage.getItem('ts_v15_data');
     if (json) {
         try {
             const parsed = JSON.parse(json);
@@ -763,7 +763,7 @@ function adminSystemTick() {
         startTimeDisplay: startTimeDisplay
     };
 
-    localStorage.setItem('ts_v14_dashboard_sync', JSON.stringify(syncObj));
+    localStorage.setItem('ts_v15_dashboard_sync', JSON.stringify(syncObj));
 }
 
 function getMatchesAtTime(shortTime) {
@@ -874,35 +874,44 @@ window.resizeDashText = function(dir) {
 };
 
 function dashboardTick() {
-    const json = localStorage.getItem('ts_v14_dashboard_sync');
+    const json = localStorage.getItem('ts_v15_dashboard_sync');
     if (json) {
         const sync = JSON.parse(json);
         updateDashUI(sync);
     }
 }
 
+// SAFE TEXT HELPER (Prevents crashes if element missing)
+function safeText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.innerText = text;
+}
+
 function updateDashUI(sync) {
     const now = new Date();
-    document.getElementById('dashClock').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    document.getElementById('dashTitle').innerText = sync.title || "TURNERING";
+    safeText('dashClock', now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    
+    // safeText('dashTitle', sync.title || "TURNERING"); // Removed to prevent crash if hidden
 
     if (sync.finalMode) {
         document.getElementById('dashSeriesMode').classList.add('hidden');
         document.getElementById('dashFinalMode').classList.remove('hidden');
         const fs = sync.finalState;
 
-        document.getElementById('dashFinalTitle').innerText = fs.title;
-        document.getElementById('dashFinalAct').innerText = fs.act;
-        document.getElementById('dashFinalT1').innerText = fs.t1;
-        document.getElementById('dashFinalT2').innerText = fs.t2;
-        document.getElementById('dashFinalS1').innerText = fs.s1;
-        document.getElementById('dashFinalS2').innerText = fs.s2;
+        safeText('dashFinalTitle', fs.title);
+        safeText('dashFinalAct', fs.act);
+        safeText('dashFinalT1', fs.t1);
+        safeText('dashFinalT2', fs.t2);
+        safeText('dashFinalS1', fs.s1);
+        safeText('dashFinalS2', fs.s2);
 
         const m = Math.floor(sync.timer / 60).toString().padStart(2, '0');
         const s = (sync.timer % 60).toString().padStart(2, '0');
         const el = document.getElementById('dashFinalTimer');
-        el.innerText = `${m}:${s}`;
-        el.style.color = sync.running ? '#4caf50' : '#f44336';
+        if(el) {
+            el.innerText = `${m}:${s}`;
+            el.style.color = sync.running ? '#4caf50' : '#f44336';
+        }
 
     } else {
         document.getElementById('dashFinalMode').classList.add('hidden');
@@ -913,45 +922,51 @@ function updateDashUI(sync) {
         const dTimer = document.getElementById('dashTimer');
         const dStatus = document.getElementById('dashStatus');
 
-        dTimer.innerText = `${m}:${s}`;
+        if(dTimer) dTimer.innerText = `${m}:${s}`;
 
-        if (sync.running) {
-            dTimer.style.color = '#4caf50';
-            dStatus.innerText = "KAMP PÅGÅR";
-            dStatus.style.background = "#1b5e20";
-        } else if (sync.timer === 0) {
-            dTimer.style.color = '#f44336';
-            dStatus.innerText = "TIDEN ER UTE";
-            dStatus.style.background = "#b71c1c";
-        } else {
-            dTimer.style.color = '#ff9800';
-            dStatus.innerText = "KLAR / PAUSE";
-            dStatus.style.background = "#333";
+        if(dTimer && dStatus) {
+            if (sync.running) {
+                dTimer.style.color = '#4caf50';
+                dStatus.innerText = "KAMP PÅGÅR";
+                dStatus.style.background = "#1b5e20";
+            } else if (sync.timer === 0) {
+                dTimer.style.color = '#f44336';
+                dStatus.innerText = "TIDEN ER UTE";
+                dStatus.style.background = "#b71c1c";
+            } else {
+                dTimer.style.color = '#ff9800';
+                dStatus.innerText = "KLAR / PAUSE";
+                dStatus.style.background = "#333";
+            }
         }
 
-        document.getElementById('dashStartTime').innerText = sync.startTimeDisplay || "";
+        safeText('dashStartTime', sync.startTimeDisplay || "");
 
         const amBox = document.getElementById('dashActiveMatches');
-        if (sync.activeMatches.length === 0) {
-            amBox.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">Ingen aktive kamper</div>';
-        } else {
-            amBox.innerHTML = sync.activeMatches.map(m => `
-                <div class="dash-match-card">
-                    <div class="dm-row-top"><span class="dm-court">${m.court}</span><span class="dm-type">${m.type}</span></div>
-                    <div class="dm-teams">${m.t1} vs ${m.t2}</div>
-                    <div class="dm-score">${m.s1 != null ? m.s1 : '-'} - ${m.s2 != null ? m.s2 : '-'}</div>
-                </div>`).join('');
+        if(amBox) {
+            if (sync.activeMatches.length === 0) {
+                amBox.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">Ingen aktive kamper</div>';
+            } else {
+                amBox.innerHTML = sync.activeMatches.map(m => `
+                    <div class="dash-match-card">
+                        <div class="dm-row-top"><span class="dm-court">${m.court}</span><span class="dm-type">${m.type}</span></div>
+                        <div class="dm-teams">${m.t1} vs ${m.t2}</div>
+                        <div class="dm-score">${m.s1 != null ? m.s1 : '-'} - ${m.s2 != null ? m.s2 : '-'}</div>
+                    </div>`).join('');
+            }
         }
 
         const nmBox = document.getElementById('dashNextMatches');
-        if (sync.nextMatches.length === 0) {
-            nmBox.innerHTML = '<div style="text-align:center;color:#555;">Ingen flere kamper</div>';
-        } else {
-            nmBox.innerHTML = sync.nextMatches.map(m => `
-                <div class="dash-next-card">
-                    <span class="dnm-time">${m.time}</span>
-                    <span>${m.court}: ${m.t1} vs ${m.t2}</span>
-                </div>`).join('');
+        if(nmBox) {
+            if (sync.nextMatches.length === 0) {
+                nmBox.innerHTML = '<div style="text-align:center;color:#555;">Ingen flere kamper</div>';
+            } else {
+                nmBox.innerHTML = sync.nextMatches.map(m => `
+                    <div class="dash-next-card">
+                        <span class="dnm-time">${m.time}</span>
+                        <span>${m.court}: ${m.t1} vs ${m.t2}</span>
+                    </div>`).join('');
+            }
         }
     }
 }
@@ -961,8 +976,8 @@ window.genId = function() { return Math.random().toString(36).substr(2, 9); };
 
 window.updateTitle = function(val) {
     window.data.title = val;
-    document.getElementById('displayTitle').innerText = val;
-    document.getElementById('printTitle').innerText = val;
+    safeText('displayTitle', val);
+    safeText('printTitle', val);
     saveLocal();
 };
 
@@ -994,7 +1009,7 @@ window.saveToFile = function() {
     const blob = new Blob([JSON.stringify(window.data, null, 2)], { type: "application/json" });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `turnering_v14_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `turnering_v15_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
 };
 
@@ -1014,7 +1029,7 @@ window.loadFromFile = function() {
 
 window.confirmReset = function() {
     if (confirm("Slett ALT? Dette kan ikke angres.")) {
-        localStorage.removeItem('ts_v14_data');
+        localStorage.removeItem('ts_v15_data');
         location.reload();
     }
 };
@@ -1030,4 +1045,4 @@ window.showTab = function(id) {
     }
 };
 
-/* Version: #14 */
+/* Version: #15 */
