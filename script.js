@@ -1,4 +1,4 @@
-/* Version: #15 */
+/* Version: #16 */
 
 // =============================================================
 // 1. GLOBAL DATA & STATE
@@ -48,6 +48,7 @@ let draggedFromTeamId = null;
 
 // Dashboard UI State
 let dashFontSizeVW = 18;
+let isDashboardMode = false; // Flag to check if running as dashboard
 
 // =============================================================
 // 2. INITIALIZATION
@@ -55,6 +56,7 @@ let dashFontSizeVW = 18;
 document.addEventListener("DOMContentLoaded", () => {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('mode') === 'dashboard') {
+        isDashboardMode = true;
         initDashboard();
     } else {
         initAdmin();
@@ -62,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // =============================================================
-// 3. ADMIN LOGIC
+// 3. ADMIN LOGIC (THE MASTER)
 // =============================================================
 
 function initAdmin() {
@@ -83,16 +85,50 @@ function initAdmin() {
 
     // Start System Clock Loop (Admin drives the sync)
     setInterval(adminSystemTick, 1000);
+
+    // Listen for commands from Dashboard (Remote Control)
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'ts_v16_command') {
+            const cmd = JSON.parse(e.newValue);
+            if (cmd) handleRemoteCommand(cmd);
+        }
+    });
+}
+
+// HANDLE COMMANDS FROM DASHBOARD
+function handleRemoteCommand(cmd) {
+    if (!cmd || !cmd.action) return;
+    console.log("Admin received command:", cmd.action);
+
+    switch (cmd.action) {
+        case 'START':
+            if (!isTimerRunning) startTimer();
+            break;
+        case 'PAUSE':
+            pauseTimer();
+            break;
+        case 'RESET':
+            resetTimer();
+            break;
+        case 'ADJUST':
+            adjustTimer(cmd.value); // cmd.value is minutes (+1 or -1)
+            break;
+        case 'HORN':
+            playHorn();
+            break;
+    }
+    // Clear command after processing so we don't process it again on reload
+    localStorage.removeItem('ts_v16_command');
 }
 
 // --- PERSISTENCE ---
 window.saveLocal = function() {
-    localStorage.setItem('ts_v15_data', JSON.stringify(window.data));
-    localStorage.setItem('ts_v15_update_trigger', Date.now());
+    localStorage.setItem('ts_v16_data', JSON.stringify(window.data));
+    localStorage.setItem('ts_v16_update_trigger', Date.now());
 };
 
 function loadLocal() {
-    const json = localStorage.getItem('ts_v15_data');
+    const json = localStorage.getItem('ts_v16_data');
     if (json) {
         try {
             const parsed = JSON.parse(json);
@@ -763,7 +799,7 @@ function adminSystemTick() {
         startTimeDisplay: startTimeDisplay
     };
 
-    localStorage.setItem('ts_v15_dashboard_sync', JSON.stringify(syncObj));
+    localStorage.setItem('ts_v16_dashboard_sync', JSON.stringify(syncObj));
 }
 
 function getMatchesAtTime(shortTime) {
@@ -801,11 +837,18 @@ function getNextMatches(shortTime) {
     });
 }
 
-// Timer Controls
+// =============================================================
+// TIMER CONTROL LOGIC (MASTER)
+// =============================================================
+
+// Start (either from local click or remote command)
 window.startTimer = function() {
-    if (isTimerRunning) return;
+    // 1. Play Sound (if possible)
     if (audioCtx.state === 'suspended') audioCtx.resume();
     playHorn();
+
+    // 2. Logic
+    if (isTimerRunning) return;
     isTimerRunning = true;
     timerInterval = setInterval(() => {
         timerSeconds--;
@@ -853,7 +896,7 @@ window.playHorn = function() {
 };
 
 // =============================================================
-// 4. DASHBOARD LOGIC
+// 4. DASHBOARD LOGIC (THE SLAVE / REMOTE)
 // =============================================================
 
 function initDashboard() {
@@ -864,6 +907,13 @@ function initDashboard() {
     setInterval(dashboardTick, 200);
 }
 
+// SEND COMMAND TO MASTER
+window.sendCommand = function(action, value) {
+    const cmd = { action: action, value: value, timestamp: Date.now() };
+    localStorage.setItem('ts_v16_command', JSON.stringify(cmd));
+    // Optimistic UI update could happen here, but we rely on fast sync
+};
+
 // Resizing
 window.resizeDashText = function(dir) {
     dashFontSizeVW += dir;
@@ -873,15 +923,34 @@ window.resizeDashText = function(dir) {
     if (el) el.style.fontSize = dashFontSizeVW + "vw";
 };
 
+// Override controls in Dashboard to send commands instead of running logic
+if (isDashboardMode) {
+    // Redefine global functions for the dashboard context
+    window.startTimer = function() { sendCommand('START'); };
+    window.pauseTimer = function() { sendCommand('PAUSE'); };
+    window.resetTimer = function() { sendCommand('RESET'); }; // Not really used on dash, but safety
+    window.adjustTimer = function(min) { sendCommand('ADJUST', min); };
+    window.playHorn = function() { 
+        // Play locally immediately for feedback
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 150;
+        const g = audioCtx.createGain(); osc.connect(g); g.connect(audioCtx.destination);
+        g.gain.setValueAtTime(1, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.0);
+        osc.start(); osc.stop(audioCtx.currentTime + 1.0);
+        // AND tell master to play
+        sendCommand('HORN'); 
+    };
+}
+
 function dashboardTick() {
-    const json = localStorage.getItem('ts_v15_dashboard_sync');
+    const json = localStorage.getItem('ts_v16_dashboard_sync');
     if (json) {
         const sync = JSON.parse(json);
         updateDashUI(sync);
     }
 }
 
-// SAFE TEXT HELPER (Prevents crashes if element missing)
+// SAFE TEXT HELPER
 function safeText(id, text) {
     const el = document.getElementById(id);
     if (el) el.innerText = text;
@@ -891,8 +960,6 @@ function updateDashUI(sync) {
     const now = new Date();
     safeText('dashClock', now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     
-    // safeText('dashTitle', sync.title || "TURNERING"); // Removed to prevent crash if hidden
-
     if (sync.finalMode) {
         document.getElementById('dashSeriesMode').classList.add('hidden');
         document.getElementById('dashFinalMode').classList.remove('hidden');
@@ -976,8 +1043,8 @@ window.genId = function() { return Math.random().toString(36).substr(2, 9); };
 
 window.updateTitle = function(val) {
     window.data.title = val;
-    safeText('displayTitle', val);
-    safeText('printTitle', val);
+    document.getElementById('displayTitle').innerText = val;
+    document.getElementById('printTitle').innerText = val;
     saveLocal();
 };
 
@@ -1009,7 +1076,7 @@ window.saveToFile = function() {
     const blob = new Blob([JSON.stringify(window.data, null, 2)], { type: "application/json" });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `turnering_v15_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `turnering_v16_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
 };
 
@@ -1029,7 +1096,7 @@ window.loadFromFile = function() {
 
 window.confirmReset = function() {
     if (confirm("Slett ALT? Dette kan ikke angres.")) {
-        localStorage.removeItem('ts_v15_data');
+        localStorage.removeItem('ts_v16_data');
         location.reload();
     }
 };
@@ -1045,4 +1112,4 @@ window.showTab = function(id) {
     }
 };
 
-/* Version: #15 */
+/* Version: #16 */
