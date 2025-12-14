@@ -1,5 +1,6 @@
-/* Version: #7 */
-// --- DATA STORE ---
+/* Version: #8 */
+
+// --- GLOBAL VARIABLES ---
 let data = {
     title: "Turnering",
     classes: ["10A","10B","10C","10D"],
@@ -8,14 +9,43 @@ let data = {
     teams: [],
     matches: [],
     settings: { startTime: "10:15", finalsTime: "14:00", matchDuration: 15, breakDuration: 5 },
-    teamsLocked: false
+    teamsLocked: false,
+    finalState: { active: false, t1: "Lag A", t2: "Lag B", s1: 0, s2: 0, title: "FINALE", act: "Volleyball" }
 };
 
+// Audio context
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let soundEnabled = true;
 let wakeLock = null;
 
-// --- INIT ---
-document.addEventListener("DOMContentLoaded", function() {
+// Timer vars
+let timerInterval = null;
+let timerSeconds = 900;
+let isTimerRunning = false;
+
+// Drag & Drop vars
+let draggedMemberId = null;
+let draggedFromTeamId = null;
+
+// --- INITIALIZATION ---
+document.addEventListener("DOMContentLoaded", () => {
+    // Sjekk om vi er i Dashboard-modus (Storskjerm)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mode') === 'dashboard') {
+        initDashboard();
+    } else {
+        initAdmin();
+    }
+});
+
+// =============================================================
+// ADMIN LOGIC
+// =============================================================
+
+function initAdmin() {
+    document.getElementById('adminView').style.display = 'block';
+    document.getElementById('dashboardView').classList.add('hidden');
+    
     loadLocal();
     renderClassButtons();
     renderStudentList();
@@ -23,61 +53,91 @@ document.addEventListener("DOMContentLoaded", function() {
     if(data.teams.length) renderTeams();
     if(data.matches.length) renderSchedule();
     updateLeaderboard();
-    setInterval(checkSystemTime, 1000);
-});
+    
+    // Start system clock loop for Admin UI
+    setInterval(adminSystemTick, 1000);
+}
 
-// --- CORE UTILS ---
-function saveLocal() { localStorage.setItem('ts_v7', JSON.stringify(data)); }
+// --- DATA PERSISTENCE ---
+function saveLocal() { 
+    localStorage.setItem('ts_v8_data', JSON.stringify(data));
+    // Trigger update for dashboard
+    localStorage.setItem('ts_v8_update_trigger', Date.now()); 
+}
+
 function loadLocal() {
-    const json = localStorage.getItem('ts_v7');
-    if(json) { data = {...data, ...JSON.parse(json)}; updateInputs(); }
+    const json = localStorage.getItem('ts_v8_data');
+    if(json) { 
+        data = {...data, ...JSON.parse(json)}; 
+        updateInputs();
+    }
     document.getElementById('displayTitle').innerText = data.title;
     document.getElementById('tournamentTitleInput').value = data.title;
-    document.getElementById('printTitle').innerText = data.title; // Update print title
+    document.getElementById('printTitle').innerText = data.title;
 }
+
 function updateInputs() {
     ['startTime','finalsTime','matchDuration','breakDuration'].forEach(k => {
         const el = document.getElementById(k);
         if(el) el.value = data.settings[k];
     });
 }
-function genId() { return Math.random().toString(36).substr(2,9); }
-function toggleSound() { 
-    soundEnabled = !soundEnabled; 
-    document.getElementById('soundToggleBtn').innerText = soundEnabled ? "🔊 Lyd PÅ" : "🔇 Lyd AV";
-}
-function updateTitle(val) {
-    data.title = val;
-    document.getElementById('displayTitle').innerText = val;
-    document.getElementById('printTitle').innerText = val;
-    saveLocal();
-}
 
-// --- WAKE LOCK ---
-async function toggleWakeLock() {
-    const btn = document.getElementById('wakeLockBtn');
-    if(wakeLock !== null) {
-        wakeLock.release().then(() => { wakeLock = null; btn.classList.remove('active'); btn.innerHTML='<i class="fas fa-eye"></i> Skjerm: Auto'; });
-    } else {
-        try {
-            wakeLock = await navigator.wakeLock.request('screen');
-            btn.classList.add('active');
-            btn.innerHTML='<i class="fas fa-eye"></i> Skjerm: PÅ (Låst)';
-        } catch(err) { alert("Wake Lock feilet (krever HTTPS?)"); }
-    }
-}
-
-// --- TABS ---
-window.showTab = function(id) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    // Sync nav
-    const map = {'setup':0,'arena':1,'draw':2,'matches':3,'finals':4};
-    if(map[id] !== undefined) document.querySelectorAll('.tabs button')[map[id]].classList.add('active');
+// --- DASHBOARD LAUNCHER ---
+window.openDashboard = function() {
+    const url = window.location.href.split('?')[0] + '?mode=dashboard';
+    window.open(url, 'TurneringsDashboard', 'width=1280,height=720');
 };
 
-// --- SETUP ---
+// --- DRAG & DROP IMPLEMENTATION ---
+window.handleDragStart = function(e, memberId, teamId) {
+    if (data.teamsLocked) {
+        e.preventDefault();
+        return;
+    }
+    draggedMemberId = memberId;
+    draggedFromTeamId = teamId;
+    e.dataTransfer.effectAllowed = "move";
+    e.target.classList.add('dragging');
+};
+
+window.handleDragOver = function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    e.currentTarget.classList.add('drag-over');
+};
+
+window.handleDragLeave = function(e) {
+    e.currentTarget.classList.remove('drag-over');
+};
+
+window.handleDrop = function(e, targetTeamId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    // Find references
+    const sourceTeam = data.teams.find(t => t.id === draggedFromTeamId);
+    const targetTeam = data.teams.find(t => t.id === targetTeamId);
+    
+    if (sourceTeam && targetTeam && sourceTeam !== targetTeam) {
+        const memberIndex = sourceTeam.members.findIndex(m => m.id === draggedMemberId);
+        if (memberIndex > -1) {
+            const member = sourceTeam.members.splice(memberIndex, 1)[0];
+            targetTeam.members.push(member);
+            saveLocal();
+            renderTeams();
+        }
+    }
+    
+    // Cleanup
+    document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+    draggedMemberId = null;
+    draggedFromTeamId = null;
+};
+
+// --- STANDARD ADMIN FUNCTIONS ---
+
+// Classes & Students
 let selectedClass = "";
 window.renderClassButtons = function() {
     const d = document.getElementById('classButtons'); d.innerHTML = '';
@@ -124,7 +184,7 @@ window.renderStudentList = function() {
 window.togglePres = function(id) { const s = data.students.find(x=>x.id==id); if(s){s.present=!s.present; saveLocal(); renderStudentList();} };
 window.clearStudents = function() { if(confirm("Slett alle?")) { data.students=[]; saveLocal(); renderStudentList(); } };
 
-// --- ARENA ---
+// Arena
 window.renderCourts = function() {
     const l = document.getElementById('courtList'); l.innerHTML = '';
     data.courts.forEach((c,i) => {
@@ -140,7 +200,7 @@ window.delCourt = function(i) { data.courts.splice(i,1); saveLocal(); renderCour
     document.getElementById(id).addEventListener('change', e => { data.settings[id] = e.target.value; saveLocal(); });
 });
 
-// --- TEAMS GENERATION (FIXED BALANCING) ---
+// Teams Generation
 window.toggleCustomMix = function() {
     const s = document.getElementById('drawStrategy').value;
     document.getElementById('customMixPanel').classList.toggle('hidden', s !== 'custom');
@@ -162,15 +222,12 @@ window.generateTeams = function() {
     data.teams = Array.from({length: count}, (_,i) => ({id:i+1, name:`Lag ${i+1}`, members:[], points:0, stats:{gf:0, ga:0, w:0, d:0, l:0}}));
 
     if(strategy === 'balanced') {
-        // FIXED LOGIC: Deck of Cards approach
-        // 1. Bucket by class
+        // Deck of Cards logic
         let buckets = {};
         data.classes.forEach(c => {
             buckets[c] = pool.filter(s => s.class === c);
             shuffle(buckets[c]);
         });
-        
-        // 2. Create "Deck" (A, B, C, D, A, B, C, D...)
         let deck = [];
         let anyLeft = true;
         while(anyLeft) {
@@ -182,8 +239,6 @@ window.generateTeams = function() {
                 }
             });
         }
-        
-        // 3. Deal to teams
         deck.forEach((student, index) => {
             data.teams[index % count].members.push(student);
         });
@@ -211,7 +266,6 @@ window.generateTeams = function() {
         }
     }
     else {
-        // AB / CD or Custom
         let group1Classes = [];
         if(strategy === 'ab_cd') {
             const mid = Math.ceil(data.classes.length/2);
@@ -226,16 +280,26 @@ window.generateTeams = function() {
         shuffle(pool1); pool1.forEach((s,i) => teams1[i%teams1.length].members.push(s));
         shuffle(pool2); pool2.forEach((s,i) => teams2[i%teams2.length].members.push(s));
     }
-    
     saveLocal(); renderTeams();
 };
 
 window.renderTeams = function() {
     const d = document.getElementById('drawDisplay'); d.innerHTML = '';
     data.teams.forEach(t => {
-        const card = document.createElement('div'); card.className = 'team-card';
-        const mems = t.members.map((m,i) => `<div class="team-member"><span>${i+1}. ${m.name}</span><span class="team-class-badge">${m.class}</span></div>`).join('');
-        card.innerHTML = `<h3><input value="${t.name}" onchange="renameTeam(${t.id},this.value)" style="background:none;border:none;color:inherit;text-align:center;width:100%;font-weight:bold;"></h3><div>${mems}</div>`;
+        const card = document.createElement('div'); 
+        card.className = 'team-card';
+        // Add drop listeners
+        card.ondragover = window.handleDragOver;
+        card.ondragleave = window.handleDragLeave;
+        card.ondrop = (e) => window.handleDrop(e, t.id);
+
+        const mems = t.members.map((m,i) => `
+            <div class="team-member" draggable="true" ondragstart="handleDragStart(event, '${m.id}', ${t.id})">
+                <span>${i+1}. ${m.name}</span>
+                <span class="team-class-badge">${m.class}</span>
+            </div>`).join('');
+        
+        card.innerHTML = `<h3><input value="${t.name}" onchange="renameTeam(${t.id},this.value)"></h3><div>${mems}</div>`;
         d.appendChild(card);
     });
     const l = document.getElementById('lockBtn');
@@ -245,7 +309,7 @@ window.renderTeams = function() {
 window.renameTeam = function(id,v) { data.teams.find(t=>t.id==id).name=v; saveLocal(); updateLeaderboard(); };
 window.toggleLockTeams = function() { data.teamsLocked = !data.teamsLocked; saveLocal(); renderTeams(); };
 
-// --- SCHEDULE & RECALC ---
+// Schedule
 window.generateSchedule = function() {
     if(!data.teamsLocked) toggleLockTeams();
     if(data.courts.length === 0) return alert("Ingen baner!");
@@ -342,7 +406,7 @@ window.addManualMatch = function() {
 };
 window.clearSchedule = function() { if(confirm("Slett alt?")) { data.matches=[]; saveLocal(); renderSchedule(); updateLeaderboard(); } };
 
-// --- LEADERBOARD ---
+// Leaderboard
 window.updateLeaderboard = function() {
     data.teams.forEach(t => { t.points=0; t.stats={gf:0, ga:0, w:0, d:0, l:0}; });
     data.matches.forEach(m => {
@@ -359,6 +423,8 @@ window.updateLeaderboard = function() {
         }
     });
     data.teams.sort((a,b) => b.points-a.points || (b.stats.gf-b.stats.ga)-(a.stats.gf-a.stats.ga));
+    
+    // Update Final Selects
     const s1 = document.getElementById('finalTeam1');
     const s2 = document.getElementById('finalTeam2');
     if(s1 && s2) {
@@ -370,74 +436,118 @@ window.updateLeaderboard = function() {
              if(v2) s2.value = v2; else if(data.teams.length>1) s2.selectedIndex = 1;
         }
     }
+    // Update Mini Leaderboard
     const mb = document.getElementById('miniLeaderboard');
     if(mb) mb.innerHTML = data.teams.slice(0, 8).map((t,i) => `<tr><td>${i+1}</td><td>${t.name}</td><td>${t.points}</td></tr>`).join('');
 };
 
-// --- SYSTEM CLOCK & ALERTS ---
-let lastAlertTime = "";
-const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-window.checkSystemTime = function() {
+// --- TIMER & SYNC LOGIC ---
+
+// This runs on Admin to update clock and broadcast timer state
+function adminSystemTick() {
+    // Update Realtime Clock
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-    const el = document.getElementById('realTimeClock');
-    if(el) el.innerText = timeStr;
-    const shortTime = timeStr.substr(0,5);
-    const nextMatch = data.matches.find(m => m.time > shortTime);
-    const info = document.getElementById('nextEventInfo');
-    if(nextMatch && info) {
-        info.innerText = `Neste: Kl ${nextMatch.time}`;
-        const [h, m] = nextMatch.time.split(':').map(Number);
-        const matchDate = new Date(); matchDate.setHours(h, m, 0);
-        const diffMs = matchDate - now;
-        if(diffMs > 59000 && diffMs < 61000 && lastAlertTime !== nextMatch.time) {
-            lastAlertTime = nextMatch.time;
-            if(soundEnabled) playHighAlert();
-        }
-    } else if(info) info.innerText = "Ingen flere kamper";
-};
-function playHighAlert() {
-    if(audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    osc.type = 'sine'; 
-    osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-    osc.frequency.linearRampToValueAtTime(1500, audioCtx.currentTime + 0.5);
-    osc.frequency.linearRampToValueAtTime(1200, audioCtx.currentTime + 1.0);
-    g.gain.setValueAtTime(0.5, audioCtx.currentTime);
-    g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.5);
-    osc.connect(g); g.connect(audioCtx.destination);
-    osc.start(); osc.stop(audioCtx.currentTime + 1.5);
+    document.getElementById('adminRealTime').innerText = timeStr;
+    
+    // Broadcast Timer State (Seconds remaining, Running status, Current Matches Info)
+    // We do this via a separate localStorage key to avoid heavy data reload
+    const activeMatches = getMatchesAtTime(timeStr.substr(0,5));
+    const nextMatches = getNextMatches(timeStr.substr(0,5));
+
+    const syncObj = {
+        timer: timerSeconds,
+        running: isTimerRunning,
+        activeMatches: activeMatches,
+        nextMatches: nextMatches,
+        finalMode: data.finalState.active,
+        finalState: data.finalState,
+        title: data.title
+    };
+    
+    localStorage.setItem('ts_v8_dashboard_sync', JSON.stringify(syncObj));
 }
 
-// --- FINALS LOGIC ---
-let finalTimer = null;
-let finalSec = 900;
-window.setActiveFinal = function() {
-    const t1 = data.teams.find(t=>t.id==document.getElementById('finalTeam1').value);
-    const t2 = data.teams.find(t=>t.id==document.getElementById('finalTeam2').value);
-    document.getElementById('stageTitle').innerText = document.getElementById('finalType').value;
-    document.getElementById('stageActivity').innerText = document.getElementById('finalAct').value;
-    document.getElementById('stageT1').innerText = t1.name;
-    document.getElementById('stageT2').innerText = t2.name;
-    document.getElementById('stageS1').value = 0;
-    document.getElementById('stageS2').value = 0;
-    resetFinalTimer();
-};
-window.startFinalTimer = function() {
-    if(finalTimer) return;
+function getMatchesAtTime(shortTime) {
+    // Find matches starting at the closest previous block or current block
+    // Simplified: Find matches starting exactly at this time, OR if none, 
+    // find matches that started recently?
+    // Let's stick to: matches starting at the scheduled time.
+    // Better UX: Show matches belonging to the "Current Slot".
+    // We find the block with time <= current time.
+    // Sorting matches by time
+    const sorted = [...data.matches].sort((a,b) => a.time.localeCompare(b.time));
+    // Find the latest start time that is <= current time
+    let currentBlockTime = null;
+    for(let m of sorted) {
+        if(m.time <= shortTime) currentBlockTime = m.time;
+        else break;
+    }
+    
+    // If currentBlockTime is very old (e.g. > 30 mins ago), maybe don't show?
+    // For now, show matches from currentBlockTime
+    if(!currentBlockTime) return [];
+    
+    return sorted.filter(m => m.time === currentBlockTime).map(m => {
+        const t1 = data.teams.find(t=>t.id==m.t1);
+        const t2 = data.teams.find(t=>t.id==m.t2);
+        return {
+            court: m.court, type: m.type,
+            t1: t1?t1.name:'?', t2: t2?t2.name:'?',
+            s1: m.s1, s2: m.s2
+        };
+    });
+}
+
+function getNextMatches(shortTime) {
+    // Find matches > current time
+    const sorted = [...data.matches].sort((a,b) => a.time.localeCompare(b.time));
+    const future = sorted.filter(m => m.time > shortTime);
+    if(future.length === 0) return [];
+    const nextBlockTime = future[0].time;
+    return future.filter(m => m.time === nextBlockTime).map(m => {
+        const t1 = data.teams.find(t=>t.id==m.t1);
+        const t2 = data.teams.find(t=>t.id==m.t2);
+        return {
+            time: m.time, court: m.court,
+            t1: t1?t1.name:'?', t2: t2?t2.name:'?'
+        };
+    });
+}
+
+// Timer Controls (Admin)
+window.startTimer = function() {
+    if(isTimerRunning) return;
     if(audioCtx.state==='suspended') audioCtx.resume();
     playHorn();
-    finalTimer = setInterval(() => {
-        finalSec--;
-        const m=Math.floor(finalSec/60).toString().padStart(2,'0');
-        const s=(finalSec%60).toString().padStart(2,'0');
-        document.getElementById('finalTimerDisplay').innerText = `${m}:${s}`;
-        if(finalSec<=0) { pauseFinalTimer(); playHorn(); }
+    isTimerRunning = true;
+    timerInterval = setInterval(() => {
+        timerSeconds--;
+        updateAdminTimerUI();
+        if(timerSeconds <= 0) {
+            pauseTimer();
+            playHorn();
+            isTimerRunning = false;
+        }
     }, 1000);
 };
-window.pauseFinalTimer = function() { clearInterval(finalTimer); finalTimer=null; };
-window.resetFinalTimer = function() { pauseFinalTimer(); finalSec = parseInt(data.settings.matchDuration)*60; document.getElementById('finalTimerDisplay').innerText = "15:00"; };
+window.pauseTimer = function() {
+    clearInterval(timerInterval);
+    isTimerRunning = false;
+};
+window.resetTimer = function() {
+    pauseTimer();
+    timerSeconds = parseInt(data.settings.matchDuration) * 60;
+    updateAdminTimerUI();
+};
+function updateAdminTimerUI() {
+    const m = Math.floor(timerSeconds/60).toString().padStart(2,'0');
+    const s = (timerSeconds%60).toString().padStart(2,'0');
+    document.getElementById('adminTimerDisplay').innerText = `${m}:${s}`;
+    if(data.finalState.active) {
+        // Also update final panel inputs/display if needed
+    }
+}
 window.playHorn = function() {
     const osc = audioCtx.createOscillator(); osc.type='sawtooth'; osc.frequency.value=150;
     const osc2 = audioCtx.createOscillator(); osc2.type='square'; osc2.frequency.value=148;
@@ -447,45 +557,184 @@ window.playHorn = function() {
     g.gain.linearRampToValueAtTime(0, audioCtx.currentTime+2.5);
     osc.start(); osc2.start(); osc.stop(audioCtx.currentTime+2.5); osc2.stop(audioCtx.currentTime+2.5);
 };
+
+// Finals Admin
+window.activateFinalMode = function() {
+    const t1 = data.teams.find(t=>t.id==document.getElementById('finalTeam1').value);
+    const t2 = data.teams.find(t=>t.id==document.getElementById('finalTeam2').value);
+    
+    data.finalState.active = true;
+    data.finalState.t1 = t1.name;
+    data.finalState.t2 = t2.name;
+    data.finalState.title = document.getElementById('finalType').value;
+    data.finalState.act = document.getElementById('finalAct').value;
+    data.finalState.s1 = 0;
+    data.finalState.s2 = 0;
+    
+    // Reset timer for final
+    resetTimer();
+
+    // Update Admin UI
+    document.getElementById('adminStageT1').innerText = t1.name;
+    document.getElementById('adminStageT2').innerText = t2.name;
+    document.getElementById('adminStageS1').value = 0;
+    document.getElementById('adminStageS2').value = 0;
+    
+    saveLocal(); // Syncs to dashboard
+};
+window.exitFinalMode = function() {
+    data.finalState.active = false;
+    saveLocal();
+};
+window.syncFinalScore = function() {
+    data.finalState.s1 = parseInt(document.getElementById('adminStageS1').value);
+    data.finalState.s2 = parseInt(document.getElementById('adminStageS2').value);
+    saveLocal();
+};
 window.endTournament = function() {
-    const s1 = parseInt(document.getElementById('stageS1').value);
-    const s2 = parseInt(document.getElementById('stageS2').value);
-    const t1 = document.getElementById('stageT1').innerText;
-    const t2 = document.getElementById('stageT2').innerText;
+    const s1 = data.finalState.s1;
+    const s2 = data.finalState.s2;
     let w = "UAVGJORT";
-    if(s1 > s2) w = t1;
-    if(s2 > s1) w = t2;
+    if(s1 > s2) w = data.finalState.t1;
+    if(s2 > s1) w = data.finalState.t2;
     document.getElementById('winnerText').innerText = w;
     document.getElementById('winnerOverlay').classList.remove('hidden');
-    createConfetti(); playFanfare();
+    // Also trigger on dashboard via LS? Not implemented, but Dashboard sees score.
 };
 window.closeWinner = function() { document.getElementById('winnerOverlay').classList.add('hidden'); };
-function createConfetti() {
-    const c = document.querySelector('.confetti'); c.innerHTML='';
-    for(let i=0; i<50; i++) {
-        const p = document.createElement('div');
-        p.style.left = Math.random()*100 + '%';
-        p.style.animationDelay = Math.random()*2 + 's';
-        p.style.backgroundColor = `hsl(${Math.random()*360}, 100%, 50%)`;
-        c.appendChild(p);
+
+// =============================================================
+// DASHBOARD LOGIC (STORSKJERM)
+// =============================================================
+
+function initDashboard() {
+    document.getElementById('adminView').classList.add('hidden'); // Hide admin completely
+    document.getElementById('adminView').style.display = 'none';
+    document.getElementById('dashboardView').classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // No scroll on dashboard
+
+    // Listen for data updates (reloads schedule etc)
+    window.addEventListener('storage', (e) => {
+        if(e.key === 'ts_v8_update_trigger') {
+            // Reload data silently? Or just rely on sync object?
+            // If teams change names etc, we might need full reload.
+            // For now, we trust the sync object for live match data.
+        }
+    });
+
+    // High frequency update loop
+    setInterval(dashboardTick, 200);
+}
+
+function dashboardTick() {
+    const json = localStorage.getItem('ts_v8_dashboard_sync');
+    if(!json) return;
+    const sync = JSON.parse(json);
+
+    // Update Clock
+    const now = new Date();
+    document.getElementById('dashClock').innerText = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('dashTitle').innerText = sync.title || "TURNERING";
+
+    // Mode Switch
+    if (sync.finalMode) {
+        document.getElementById('dashSeriesMode').classList.add('hidden');
+        document.getElementById('dashFinalMode').classList.remove('hidden');
+        
+        // Update Final UI
+        const fs = sync.finalState;
+        document.getElementById('dashFinalTitle').innerText = fs.title;
+        document.getElementById('dashFinalAct').innerText = fs.act;
+        document.getElementById('dashFinalT1').innerText = fs.t1;
+        document.getElementById('dashFinalT2').innerText = fs.t2;
+        document.getElementById('dashFinalS1').innerText = fs.s1;
+        document.getElementById('dashFinalS2').innerText = fs.s2;
+        
+        // Timer
+        const m = Math.floor(sync.timer/60).toString().padStart(2,'0');
+        const s = (sync.timer%60).toString().padStart(2,'0');
+        document.getElementById('dashFinalTimer').innerText = `${m}:${s}`;
+        document.getElementById('dashFinalTimer').style.color = sync.running ? '#4caf50' : '#f44336';
+        
+    } else {
+        document.getElementById('dashFinalMode').classList.add('hidden');
+        document.getElementById('dashSeriesMode').classList.remove('hidden');
+
+        // Update Timer
+        const m = Math.floor(sync.timer/60).toString().padStart(2,'0');
+        const s = (sync.timer%60).toString().padStart(2,'0');
+        const dTimer = document.getElementById('dashTimer');
+        dTimer.innerText = `${m}:${s}`;
+        
+        const dStatus = document.getElementById('dashStatus');
+        if(sync.running) {
+            dTimer.style.color = '#4caf50'; // Green
+            dStatus.innerText = "KAMP PÅGÅR";
+            dStatus.style.background = "#1b5e20";
+        } else if (sync.timer === 0) {
+            dTimer.style.color = '#f44336'; // Red
+            dStatus.innerText = "TIDEN ER UTE";
+            dStatus.style.background = "#b71c1c";
+        } else {
+            dTimer.style.color = '#ff9800'; // Orange
+            dStatus.innerText = "PAUSE / KLAR";
+            dStatus.style.background = "#333";
+        }
+
+        // Update Active Matches
+        const amBox = document.getElementById('dashActiveMatches');
+        if (sync.activeMatches.length === 0) {
+            amBox.innerHTML = '<div class="dash-placeholder" style="color:#666; font-size:2vh; text-align:center; padding:20px;">Ingen kamper i denne tidsluken</div>';
+        } else {
+            amBox.innerHTML = sync.activeMatches.map(m => `
+                <div class="dash-match-card">
+                    <div class="dm-court">${m.court}<br><small style="font-size:0.7em">${m.type}</small></div>
+                    <div class="dm-teams">${m.t1} vs ${m.t2}</div>
+                    <div class="dm-score">${m.s1!=null?m.s1:'-'} - ${m.s2!=null?m.s2:'-'}</div>
+                </div>
+            `).join('');
+        }
+
+        // Update Next Matches
+        const nmBox = document.getElementById('dashNextMatches');
+        if (sync.nextMatches.length === 0) {
+            nmBox.innerHTML = '<div style="text-align:center; color:#555;">Ingen flere kamper planlagt</div>';
+        } else {
+            nmBox.innerHTML = sync.nextMatches.map(m => `
+                <div class="dash-next-card">
+                    <span class="dnm-time">${m.time}</span>
+                    <span>${m.court}: ${m.t1} vs ${m.t2}</span>
+                </div>
+            `).join('');
+        }
     }
 }
-function playFanfare() {
-    const now = audioCtx.currentTime;
-    [0, 0.2, 0.4, 0.8].forEach((t, i) => {
-        const osc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        osc.frequency.value = [523.25, 659.25, 783.99, 1046.50][i];
-        osc.connect(g); g.connect(audioCtx.destination);
-        g.gain.exponentialRampToValueAtTime(0.01, now + t + 1);
-        osc.start(now + t); osc.stop(now + t + 1);
-    });
-}
+
+// --- UTILS ---
+window.genId = function() { return Math.random().toString(36).substr(2,9); };
+window.updateTitle = function(val) {
+    data.title = val;
+    document.getElementById('displayTitle').innerText = val;
+    document.getElementById('printTitle').innerText = val;
+    saveLocal();
+};
+window.toggleWakeLock = async function() {
+    const btn = document.getElementById('wakeLockBtn');
+    if(wakeLock !== null) {
+        wakeLock.release().then(() => { wakeLock = null; btn.classList.remove('active'); btn.innerHTML='<i class="fas fa-eye"></i> Skjerm: Auto'; });
+    } else {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            btn.classList.add('active');
+            btn.innerHTML='<i class="fas fa-eye"></i> Skjerm: PÅ (Låst)';
+        } catch(err) { alert("Wake Lock feilet (krever HTTPS?)"); }
+    }
+};
 window.saveToFile = function() {
     const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `turnering_v7_${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `turnering_v8_${new Date().toISOString().slice(0,10)}.json`;
     a.click();
 };
 window.loadFromFile = function() {
@@ -498,4 +747,11 @@ window.loadFromFile = function() {
     };
     reader.readAsText(file);
 };
-window.confirmReset = function() { if(confirm("Slett ALT?")) { localStorage.removeItem('ts_v7'); location.reload(); } };
+window.confirmReset = function() { if(confirm("Slett ALT?")) { localStorage.removeItem('ts_v8_data'); location.reload(); } };
+window.showTab = function(id) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    const map = {'setup':0,'arena':1,'draw':2,'matches':3,'finals':4};
+    if(map[id] !== undefined) document.querySelectorAll('.tabs button')[map[id]].classList.add('active');
+};
