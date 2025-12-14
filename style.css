@@ -1,22 +1,69 @@
-/* Version: #7 */
+/* Version: #8 */
 :root {
     --bg: #121212;
     --panel: #1e1e1e;
     --text: #e0e0e0;
-    --accent: #ff9800;
+    --accent: #ff9800; /* Amber/Orange */
     --blue: #2196f3;
     --green: #4caf50;
     --red: #f44336;
     --dark: #000000;
+    --grey: #555555;
 }
-body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden; }
+
+body {
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden; /* Hindre horisontal scroll */
+}
+
+/* =========================================
+   GENERELL UI (KNAPPER & INPUTS)
+   ========================================= */
+button { cursor: pointer; transition: 0.2s; font-family: inherit; }
+button:active { transform: scale(0.98); }
+
+.btn-primary { background: var(--blue); color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; }
+.btn-primary:hover { background: #1976d2; }
+
+.btn-spectacular { background: linear-gradient(135deg, var(--accent), #e65100); color: white; border: none; padding: 15px 40px; border-radius: 50px; font-size: 1.2rem; font-weight: bold; box-shadow: 0 0 20px rgba(255, 152, 0, 0.4); display: block; margin: 30px auto; }
+.btn-spectacular:hover { transform: scale(1.05); }
+
+.btn-spectacular-small { background: linear-gradient(135deg, var(--accent), #e65100); color: white; border: none; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+
+.btn-small-blue { background: #333; color: var(--blue); border: 1px solid var(--blue); padding: 5px 10px; font-size: 0.8rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; }
+.btn-small-red { background: #333; color: var(--red); border: 1px solid var(--red); padding: 5px 10px; border-radius: 4px; }
+.btn-small-grey { background: #333; color: #ccc; border: 1px solid #555; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; }
+.btn-green { background: var(--green); color: white; border:none; padding: 8px 12px; border-radius: 4px; font-weight:bold; }
+.btn-green-outline { background: transparent; color: var(--green); border: 1px dashed var(--green); padding: 8px; width: 100%; border-radius: 4px; margin-top: 10px; }
+.btn-text-red { background: none; border: none; color: var(--red); text-decoration: underline; }
+.btn-text { background: none; border: none; color: #aaa; text-decoration: underline; }
+.btn-yellow { background: #ffeb3b; color: #333; border:none; padding: 8px 12px; border-radius: 4px; font-weight: bold;}
+.btn-yellow-outline { background: transparent; color: #ffeb3b; border: 1px solid #ffeb3b; padding: 8px; width: 100%; border-radius: 4px; margin-top: 10px; }
+.btn-grey { background: var(--grey); color: white; border:none; padding: 8px 12px; border-radius: 4px; font-weight: bold;}
+
+input, select, textarea { background: #111; border: 1px solid #444; color: white; padding: 8px; border-radius: 4px; font-family: inherit; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+
+/* UTILS */
+.hidden { display: none !important; }
+.no-print { } /* Brukes i @media print */
+
+/* =========================================
+   ADMIN VIEW LAYOUT
+   ========================================= */
+#adminView {
+    display: block;
+}
 
 /* NAV */
-nav { background: var(--dark); padding: 10px 20px; display: flex; flex-direction: column; gap: 10px; border-bottom: 2px solid var(--accent); position: sticky; top:0; z-index: 1000; }
-@media(min-width: 800px) { nav { flex-direction: row; justify-content: space-between; } }
+nav { background: var(--dark); padding: 10px 20px; display: flex; flex-direction: column; gap: 10px; border-bottom: 2px solid var(--accent); position: sticky; top:0; z-index: 100; }
+@media(min-width: 900px) { nav { flex-direction: row; justify-content: space-between; } }
 
 .logo-area { display: flex; align-items: center; gap: 15px; }
-.logo { font-size: 1.2rem; font-weight: bold; color: var(--accent); text-transform: uppercase; }
+.logo { font-size: 1.2rem; font-weight: bold; color: var(--accent); text-transform: uppercase; white-space: nowrap; }
 .title-input { background: #222; border: 1px solid #444; color: white; padding: 5px; border-radius: 4px; font-weight: bold; width: 200px; }
 .version { font-size: 0.7rem; color: #888; }
 .nav-actions { display: flex; gap: 10px; align-items: center; }
@@ -25,36 +72,17 @@ nav { background: var(--dark); padding: 10px 20px; display: flex; flex-direction
 .tabs button { background: #333; border: none; color: #aaa; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; text-transform: uppercase; font-size: 0.85rem; }
 .tabs button.active { background: var(--accent); color: var(--dark); }
 
-/* BUTTONS */
-button { cursor: pointer; transition: 0.2s; }
-.btn-primary { background: var(--blue); color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; }
-.btn-spectacular { background: linear-gradient(135deg, var(--accent), #e65100); color: white; border: none; padding: 15px 40px; border-radius: 50px; font-size: 1.2rem; font-weight: bold; box-shadow: 0 0 20px rgba(255, 152, 0, 0.4); display: block; margin: 30px auto; }
-.btn-spectacular:hover { transform: scale(1.05); }
-.btn-small-blue { background: #333; color: var(--blue); border: 1px solid var(--blue); padding: 5px 10px; font-size: 0.8rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; }
-.btn-small-red { background: #333; color: var(--red); border: 1px solid var(--red); padding: 5px 10px; border-radius: 4px; }
-.btn-small-grey { background: #333; color: #ccc; border: 1px solid #555; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; }
-.btn-small-grey.active { background: var(--green); color: white; border-color: var(--green); }
-.btn-green { background: var(--green); color: white; border:none; padding: 8px 12px; border-radius: 4px; font-weight:bold; }
-.btn-green-outline { background: transparent; color: var(--green); border: 1px dashed var(--green); padding: 8px; width: 100%; border-radius: 4px; margin-top: 10px; }
-.btn-text-red { background: none; border: none; color: var(--red); text-decoration: underline; }
-.btn-text { background: none; border: none; color: #aaa; text-decoration: underline; }
-.btn-yellow { background: #ffeb3b; color: #333; border:none; padding: 8px 12px; border-radius: 4px; font-weight: bold;}
-.btn-yellow-outline { background: transparent; color: #ffeb3b; border: 1px solid #ffeb3b; padding: 8px; width: 100%; border-radius: 4px; margin-top: 10px; }
-.btn-grey { background: #555; color: white; border:none; padding: 8px 12px; border-radius: 4px; font-weight: bold;}
-
-/* LAYOUT */
+/* MAIN CONTAINER */
 .tab-content { display: none; padding-bottom: 80px; }
 .tab-content.active { display: block; animation: fadeIn 0.3s; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .container { max-width: 1200px; margin: 20px auto; background: var(--panel); padding: 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 
-/* INPUTS */
-input, select, textarea { background: #111; border: 1px solid #444; color: white; padding: 8px; border-radius: 4px; }
-.search-input { width: 200px; border-color: var(--blue); }
-
-/* SETUP GRID */
+/* SETUP TAB */
 .header-split { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
 .setup-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 30px; }
+@media(max-width: 768px) { .setup-grid { grid-template-columns: 1fr; } }
+
 .class-buttons { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 .class-btn { background: #333; border: 1px solid #444; color: #ccc; padding: 5px 10px; cursor: pointer; border-radius: 3px; font-size: 0.9rem; }
 .class-btn.selected { background: var(--blue); color: white; border-color: var(--blue); }
@@ -63,9 +91,9 @@ textarea { width: 100%; height: 120px; resize: vertical; margin-bottom: 10px; fo
 .student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; max-height: 500px; overflow-y: auto; }
 .student-item { background: #2a2a2a; padding: 8px 12px; border-radius: 4px; border-left: 3px solid #444; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
 .student-item.absent { opacity: 0.4; text-decoration: line-through; }
-.hidden { display: none !important; }
+.search-input { width: 100%; max-width: 200px; border-color: var(--blue); }
 
-/* CONFIG & DRAW */
+/* ARENA TAB */
 .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .config-box { background: #252525; padding: 20px; border-radius: 6px; }
 .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -73,19 +101,33 @@ textarea { width: 100%; height: 120px; resize: vertical; margin-bottom: 10px; fo
 .court-item { background: #333; padding: 10px; margin-bottom: 8px; border-radius: 4px; display: flex; gap: 10px; align-items: center; }
 .court-item input { flex-grow: 1; }
 
+/* DRAW TAB (TEAMS) */
 .draw-controls { background: #252525; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; }
+.draw-option { display: flex; flex-direction: column; gap: 5px; }
 .custom-mix-panel { width: 100%; background: #1a1a1a; padding: 10px; border: 1px dashed #555; margin-top: 10px; }
 .checkbox-group { display: flex; gap: 15px; flex-wrap: wrap; }
-.draw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; margin-top: 20px; }
-.team-card { background: #252525; border: 1px solid #333; border-radius: 6px; }
-.team-card h3 { background: #111; margin: 0; padding: 10px; text-align: center; color: var(--accent); border-bottom: 1px solid #333; }
-.team-member { padding: 8px 12px; border-bottom: 1px solid #333; font-size: 0.9rem; display: flex; justify-content: space-between; }
-.team-class-badge { background: #444; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; color: #ddd; }
-.print-header { display: none; }
+.info-text { font-style: italic; color: #888; margin-bottom: 15px; }
 
-/* SCHEDULE */
-.system-clock-bar { background: #000; padding: 15px; text-align: center; border-bottom: 2px solid var(--accent); display: flex; justify-content: space-around; align-items: center; font-family: monospace; font-size: 1.2rem; }
-#realTimeClock { color: var(--accent); font-weight: bold; font-size: 1.5rem; }
+.draw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; margin-top: 20px; }
+.team-card { background: #252525; border: 1px solid #333; border-radius: 6px; display: flex; flex-direction: column; }
+.team-card h3 { background: #111; margin: 0; padding: 10px; text-align: center; color: var(--accent); border-bottom: 1px solid #333; }
+.team-card h3 input { width: 100%; border: none; background: transparent; text-align: center; color: inherit; font-weight: bold; font-size: 1.1rem; }
+
+/* Drag and Drop Styling */
+.team-member { padding: 8px 12px; border-bottom: 1px solid #333; font-size: 0.9rem; display: flex; justify-content: space-between; cursor: grab; background: #252525; transition: background 0.2s; }
+.team-member:hover { background: #333; }
+.team-member.dragging { opacity: 0.5; background: var(--blue); color: white; }
+.team-card.drag-over { border: 2px dashed var(--blue); background: #2a2a2a; }
+.team-class-badge { background: #444; padding: 1px 5px; border-radius: 3px; font-size: 0.75rem; color: #ddd; }
+.move-btn { background: none; border: none; color: #666; cursor: pointer; margin-left: 5px; }
+.move-btn:hover { color: var(--blue); }
+
+/* MATCHES TAB */
+.admin-timer-panel { background: #111; padding: 15px; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
+.timer-display-small { font-family: 'Courier New', monospace; font-size: 2.5rem; font-weight: bold; color: var(--accent); }
+.timer-controls { display: flex; gap: 10px; }
+.sys-clock { font-family: monospace; color: #888; }
+
 .match-block { margin-bottom: 30px; border: 1px solid #333; border-radius: 6px; overflow: hidden; }
 .block-header { background: #1f1f1f; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
 .block-time { font-size: 1.2rem; font-weight: bold; color: var(--blue); }
@@ -94,22 +136,16 @@ textarea { width: 100%; height: 120px; resize: vertical; margin-bottom: 10px; fo
 .match-teams { flex-grow: 1; font-weight: bold; font-size: 1.1rem; }
 .match-score input { width: 45px; text-align: center; }
 
-/* FINALS ARENA */
-.finals-layout { display: flex; height: calc(100vh - 80px); }
-.finals-sidebar { width: 250px; background: #1a1a1a; padding: 20px; border-right: 1px solid #333; overflow-y: auto; }
-.finals-stage { flex-grow: 1; background: black; display: flex; align-items: center; justify-content: center; background-image: radial-gradient(circle at center, #222 0%, #000 100%); }
-#activeFinalDisplay { text-align: center; width: 100%; }
-#stageTitle { color: var(--accent); font-size: 3rem; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 5px; text-shadow: 0 0 20px rgba(255, 152, 0, 0.5); }
-#stageActivity { color: #888; font-size: 1.5rem; margin-bottom: 40px; text-transform: uppercase; }
-.stage-teams { display: flex; justify-content: center; align-items: center; gap: 50px; margin-bottom: 50px; }
-.stage-team span { display: block; font-size: 2.5rem; font-weight: bold; margin-bottom: 15px; }
-.stage-team input { font-size: 4rem; width: 120px; text-align: center; border: 2px solid #444; color: var(--blue); border-radius: 10px; }
-.versus { font-size: 2rem; color: #555; font-weight: bold; }
-.stage-timer { background: #111; padding: 20px 40px; border-radius: 10px; border: 2px solid #333; display: inline-block; }
-#finalTimerDisplay { font-family: 'Courier New', monospace; font-size: 5rem; color: var(--red); line-height: 1; margin-bottom: 20px; }
-.stage-controls { display: flex; gap: 10px; justify-content: center; }
+/* FINALS TAB (ADMIN) */
+.finals-layout { display: flex; gap: 20px; }
+.finals-sidebar { width: 300px; flex-shrink: 0; background: #252525; padding: 20px; border-radius: 8px; }
+.finals-stage-admin { flex-grow: 1; background: #1a1a1a; padding: 30px; border-radius: 8px; text-align: center; border: 1px solid #333; }
+.stage-teams-admin { display: flex; justify-content: center; align-items: center; gap: 30px; margin: 40px 0; }
+.team-box h3 { margin: 0 0 10px 0; font-size: 1.5rem; }
+.team-box input { font-size: 3rem; width: 100px; text-align: center; border: 2px solid #444; border-radius: 8px; }
+.versus { font-size: 2rem; color: #666; font-weight: bold; }
 
-/* SMALL LEADERBOARD */
+/* LEADERBOARD SMALL */
 .leaderboard-table.small th, .leaderboard-table.small td { padding: 5px; font-size: 0.85rem; }
 .leaderboard-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
 .leaderboard-table th { text-align: left; border-bottom: 1px solid #444; color: #888; }
@@ -122,54 +158,159 @@ textarea { width: 100%; height: 120px; resize: vertical; margin-bottom: 10px; fo
 .winner-overlay h2 { font-size: 6rem; color: var(--accent); margin: 10px 0; text-transform: uppercase; }
 @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-20px); } 100% { transform: translateY(0px); } }
 
-/* PRINT STYLES */
-@media print {
-    .no-print { display: none !important; }
-    body { background: white; color: black; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    .container { box-shadow: none; margin: 0; padding: 0; max-width: 100%; }
-    
-    .print-header { display: block; text-align: center; margin-bottom: 20px; border-bottom: 2px solid black; }
-    .print-header h1 { margin: 10px 0; font-size: 24pt; color: black; }
+/* =========================================
+   DASHBOARD / STORSKJERM VIEW
+   ========================================= */
+#dashboardView {
+    width: 100vw;
+    height: 100vh;
+    background: black;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
 
+.dashboard-top-bar {
+    height: 10vh;
+    background: #111;
+    border-bottom: 4px solid var(--accent);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 40px;
+}
+.dash-title { font-size: 3vh; font-weight: bold; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; }
+.dash-clock { font-size: 4vh; font-weight: bold; font-family: monospace; color: #888; }
+
+#dashSeriesMode {
+    flex-grow: 1;
+    padding: 20px;
+}
+
+.dash-grid {
+    display: grid;
+    grid-template-columns: 25% 45% 30%; /* Tre kolonner */
+    grid-template-rows: 1fr;
+    gap: 20px;
+    height: 100%;
+}
+
+.dash-panel {
+    background: #1a1a1a;
+    border: 2px solid #333;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.dash-panel h2 {
+    margin: 0 0 20px 0;
+    font-size: 3vh;
+    color: #888;
+    text-transform: uppercase;
+    border-bottom: 1px solid #444;
+    width: 100%;
+    text-align: center;
+    padding-bottom: 10px;
+}
+
+/* Timer Panel */
+.timer-panel { justify-content: center; background: radial-gradient(circle at center, #222 0%, #000 100%); }
+.dash-big-digits { font-size: 10vw; font-weight: bold; font-family: 'Courier New', monospace; color: var(--red); line-height: 1; text-shadow: 0 0 30px rgba(244, 67, 54, 0.4); }
+.dash-status { font-size: 2vh; color: white; margin-top: 10px; padding: 5px 15px; background: #333; border-radius: 20px; }
+
+/* Active Matches Panel */
+.active-matches-list { width: 100%; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+.dash-match-card { background: #252525; padding: 15px; border-radius: 8px; border-left: 5px solid var(--blue); display: flex; justify-content: space-between; align-items: center; }
+.dm-court { font-size: 2vh; color: #bbb; font-weight: bold; width: 15%; }
+.dm-teams { font-size: 2.5vh; font-weight: bold; width: 60%; text-align: left; }
+.dm-score { font-size: 3vh; font-weight: bold; color: var(--accent); width: 25%; text-align: right; }
+
+/* Next Matches Panel */
+.next-matches-list { width: 100%; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.dash-next-card { background: #111; padding: 10px; border-radius: 6px; color: #888; display: flex; justify-content: space-between; font-size: 1.8vh; }
+.dnm-time { color: var(--green); font-weight: bold; }
+
+/* Final Mode Overlay */
+#dashFinalMode {
+    position: absolute; top: 10vh; left: 0; width: 100%; height: 90vh;
+    background: black; z-index: 100;
+    display: flex; justify-content: center; align-items: center;
+    background-image: radial-gradient(circle at center, #222 0%, #000 80%);
+}
+.final-overlay-content { text-align: center; width: 100%; }
+#dashFinalTitle { font-size: 8vh; margin: 0; color: var(--accent); text-transform: uppercase; letter-spacing: 5px; text-shadow: 0 0 50px rgba(255, 152, 0, 0.6); }
+#dashFinalAct { font-size: 4vh; color: #666; margin-bottom: 50px; text-transform: uppercase; }
+.final-score-board { display: flex; justify-content: center; align-items: center; gap: 5vw; margin-bottom: 50px; }
+.final-team { text-align: center; }
+.ft-name { font-size: 5vh; font-weight: bold; margin-bottom: 10px; }
+.ft-score { font-size: 12vh; font-weight: bold; color: var(--blue); background: #111; padding: 10px 30px; border-radius: 15px; border: 3px solid #333; }
+.final-vs { font-size: 4vh; color: #444; font-weight: bold; }
+#dashFinalTimer { font-size: 8vh; font-family: monospace; color: var(--red); background: #111; padding: 10px 40px; border-radius: 10px; display: inline-block; border: 1px solid #333; }
+
+/* =========================================
+   PRINT STYLES
+   ========================================= */
+@media print {
+    /* Skjul alt som ikke er relevant for print */
+    .no-print, nav, .print-header, .generate-section, .finals-layout, .schedule-tools, .system-clock-bar, #adminView > button { display: none !important; }
+    
+    body { background: white; color: black; font-size: 12pt; }
+    .container { box-shadow: none; margin: 0; padding: 0; width: 100%; max-width: 100%; }
+    
+    /* Vis kun print-container */
+    .print-container { display: block; }
+    .print-header { display: block !important; text-align: center; border-bottom: 2px solid black; margin-bottom: 20px; }
+    .print-header h1 { font-size: 24pt; margin: 0; color: black; }
+    .print-header p { font-size: 12pt; color: #555; }
+
+    /* Lag-grid for print */
     .draw-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr); /* 3 kolonner er standard A4 portrett/landskap */
-        gap: 10px;
+        grid-template-columns: repeat(3, 1fr); /* 3 kolonner på A4 */
+        gap: 15px;
         margin-top: 10px;
     }
-    
+
     .team-card {
         background: white;
         border: 1px solid #000;
-        break-inside: avoid; /* Unngå å dele lag midt på siden */
-        color: black;
         box-shadow: none;
+        break-inside: avoid; /* Unngå page-break inni et lag */
+        page-break-inside: avoid;
     }
-    
+
     .team-card h3 {
         background: #eee;
         color: black;
         border-bottom: 1px solid #000;
         font-size: 14pt;
-    }
-    
-    .team-card input {
-        border: none;
-        background: transparent;
-        color: black;
-        font-weight: bold;
-        text-align: center;
-    }
-    
-    .team-member {
-        border-bottom: 1px solid #ccc;
-        color: black;
         padding: 5px;
+    }
+    .team-card h3 input { color: black; }
+
+    .team-member {
+        color: black;
+        border-bottom: 1px solid #ccc;
+        padding: 4px;
         font-size: 10pt;
     }
     .team-class-badge {
-        background: #ddd;
+        background: transparent;
         color: black;
         border: 1px solid #999;
+        font-weight: bold;
     }
+
+    /* Hvis vi printer kampoppsett */
+    #matches .container { display: block; }
+    .match-block { border: 1px solid #000; margin-bottom: 20px; break-inside: avoid; }
+    .block-header { background: #eee; color: black; border-bottom: 1px solid #000; }
+    .block-time { color: black; }
+    .match-row { background: white; border-bottom: 1px solid #ccc; color: black; }
+    .match-court-badge { background: #ddd; color: black; border: 1px solid #999; }
+    .match-score input { border: none; background: transparent; color: black; }
 }
+/* Version: #8 */
