@@ -1,10 +1,10 @@
-<!-- Version: #17 -->
+<!-- Version: #18 -->
 <!DOCTYPE html>
 <html lang="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Turneringssjefen - Stabil v17</title>
+    <title>Turneringssjefen v18.0</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -28,19 +28,19 @@
         <!-- NAVIGATION (Skjules på print) -->
         <nav class="no-print">
             <div class="logo-area">
-                <div class="logo">🏆 <span id="displayTitle">Turnering</span> <span class="version">v17.0 (Manuell)</span></div>
+                <div class="logo">🏆 <span id="displayTitle">Turnering</span> <span class="version">v18.0</span></div>
                 <input type="text" id="tournamentTitleInput" placeholder="Navn på turnering..." onchange="updateTitle(this.value)" class="title-input">
             </div>
             
             <div class="nav-actions">
                 <div class="file-controls">
-                    <button onclick="saveToFile()" class="btn-small-blue"><i class="fas fa-download"></i> Backup (Fil)</button>
+                    <button onclick="saveToFile()" class="btn-small-blue"><i class="fas fa-download"></i> Backup</button>
                     <label class="btn-small-blue">
                         <i class="fas fa-upload"></i> Last inn
                         <input type="file" id="fileInput" onchange="loadFromFile()" style="display:none;">
                     </label>
                 </div>
-                <button onclick="confirmReset()" class="btn-small-red"><i class="fas fa-trash"></i> Nullstill Alt</button>
+                <button onclick="confirmReset()" class="btn-small-red"><i class="fas fa-trash"></i> Nullstill</button>
             </div>
         </nav>
 
@@ -49,10 +49,9 @@
             <button onclick="showTab('setup')" class="active">1. Elever</button>
             <button onclick="showTab('arena')">2. Arena</button>
             <button onclick="showTab('draw')">3. Lag</button>
-            <button onclick="showTab('schedule')">4. Kampplan (Print)</button>
+            <button onclick="showTab('schedule')">4. Kamper & Resultater</button>
             <button onclick="showTab('control')" class="tab-highlight">5. KAMPSTYRING (Klokke)</button>
-            <button onclick="showTab('results')">6. Resultater</button>
-            <button onclick="showTab('finals')">7. Tabell & Finale</button>
+            <button onclick="showTab('finals')">6. Tabell & Finale</button>
         </div>
 
         <!-- TAB 1: OPPSETT -->
@@ -73,7 +72,7 @@
                     <div class="list-section">
                         <div class="header-row">
                             <h3>Påmeldte (<span id="studentCount">0</span>)</h3>
-                            <input type="text" id="studentSearch" placeholder="🔍 Søk for å slette/endre..." onkeyup="renderStudentList()" class="search-input">
+                            <input type="text" id="studentSearch" placeholder="🔍 Søk..." onkeyup="renderStudentList()" class="search-input">
                         </div>
                         <p class="small-info">Fjern haken ved eleven for å markere som fraværende (blir ikke med på lag).</p>
                         <div id="studentList" class="student-grid"></div>
@@ -81,7 +80,7 @@
                     </div>
                 </div>
                 <div class="footer-actions">
-                    <button class="btn-primary" onclick="showTab('arena')">Neste: Arena & Regler <i class="fas fa-arrow-right"></i></button>
+                    <button class="btn-primary" onclick="showTab('arena')">Neste <i class="fas fa-arrow-right"></i></button>
                 </div>
             </div>
         </div>
@@ -93,113 +92,104 @@
                 <div class="config-grid">
                     <div class="config-box">
                         <h3>🏟️ Baner (Aktiviteter)</h3>
-                        <p class="small-info">Legg til en bane for hver aktivitet som foregår samtidig.</p>
                         <div id="courtList"></div>
                         <button onclick="addCourt()" class="btn-green-outline">+ Legg til bane</button>
                     </div>
                     <div class="config-box">
                         <h3>⚙️ Generelt</h3>
-                        <div class="form-row">
-                            <label>Veiledende Starttid:</label>
-                            <input type="time" id="startTime" value="10:15">
-                        </div>
-                        <div class="form-row">
-                            <label>Veiledende Finalestart:</label>
-                            <input type="time" id="finalsTime" value="14:00">
-                        </div>
-                        <div class="form-row">
-                            <label>Kampvarighet (min):</label>
-                            <input type="number" id="matchDuration" value="15">
-                        </div>
-                        <div class="form-row">
-                            <label>Pause mellom kamper (min):</label>
-                            <input type="number" id="breakDuration" value="5">
-                        </div>
+                        <div class="form-row"><label>Starttid:</label><input type="time" id="startTime" value="10:15"></div>
+                        <div class="form-row"><label>Finalestart:</label><input type="time" id="finalsTime" value="14:00"></div>
+                        <div class="form-row"><label>Kamp (min):</label><input type="number" id="matchDuration" value="15"></div>
+                        <div class="form-row"><label>Pause (min):</label><input type="number" id="breakDuration" value="5"></div>
                     </div>
                 </div>
                 <div class="footer-actions">
-                    <button class="btn-primary" onclick="showTab('draw')">Neste: Laginndeling <i class="fas fa-arrow-right"></i></button>
+                    <button class="btn-primary" onclick="showTab('draw')">Neste <i class="fas fa-arrow-right"></i></button>
                 </div>
             </div>
         </div>
 
         <!-- TAB 3: LAGINNDELING -->
-        <div id="draw" class="tab-content no-print">
+        <div id="draw" class="tab-content">
             <div class="container">
-                <h2>3. Generer Lag</h2>
-                <div class="draw-controls">
-                    <div class="draw-option">
-                        <label>Fordelingsmetode:</label>
-                        <select id="drawStrategy" onchange="toggleCustomMix()">
-                            <option value="balanced">⚖️ Perfekt Miks (Jevn fordeling)</option>
-                            <option value="class_based">🏫 Klassevis (Rene klasselag)</option>
-                            <option value="ab_cd">🅰️🅱️ Base-miks (A+B mot C+D)</option>
-                            <option value="custom">🛠️ Egendefinert miks</option>
-                            <option value="random">🎲 Fullt Kaos (Tilfeldig)</option>
-                        </select>
-                    </div>
-                    
-                    <div id="customMixPanel" class="hidden custom-mix-panel">
-                        <p>Velg klasser til Pulje 1 (resten havner i Pulje 2):</p>
-                        <div id="customClassCheckboxes" class="checkbox-group"></div>
-                    </div>
+                <!-- PRINT HEADER -->
+                <div class="print-header">
+                    <h1 id="printTitleTeams">Lister</h1>
+                </div>
 
-                    <div class="draw-option">
-                        <label>Antall lag:</label>
-                        <input type="number" id="teamCount" value="12" style="width:60px;">
-                    </div>
+                <div class="no-print">
+                    <h2>3. Generer Lag</h2>
+                    <div class="draw-controls">
+                        <div class="draw-option">
+                            <label>Fordeling:</label>
+                            <select id="drawStrategy" onchange="toggleCustomMix()">
+                                <option value="balanced">⚖️ Perfekt Miks (Jevn)</option>
+                                <option value="class_based">🏫 Klassevis</option>
+                                <option value="ab_cd">🅰️🅱️ Base-miks (A+B / C+D)</option>
+                                <option value="custom">🛠️ Egendefinert</option>
+                                <option value="random">🎲 Kaos</option>
+                            </select>
+                        </div>
+                        
+                        <div id="customMixPanel" class="hidden custom-mix-panel">
+                            <p>Pulje 1 (resten til Pulje 2):</p>
+                            <div id="customClassCheckboxes" class="checkbox-group"></div>
+                        </div>
 
-                    <button class="btn-primary" onclick="generateTeams()">⚡ Generer Lag</button>
-                    <button id="lockBtn" class="btn-yellow" onclick="toggleLockTeams()"><i class="fas fa-unlock"></i> Åpen for redigering</button>
+                        <div class="draw-option">
+                            <label>Antall lag:</label>
+                            <input type="number" id="teamCount" value="12" style="width:60px;">
+                        </div>
+
+                        <button class="btn-primary" onclick="generateTeams()">⚡ Generer</button>
+                        <button class="btn-grey" onclick="window.print()"><i class="fas fa-print"></i> Skriv ut Laglister</button>
+                        <button id="lockBtn" class="btn-yellow" onclick="toggleLockTeams()"><i class="fas fa-unlock"></i> Åpen</button>
+                    </div>
+                    <p class="info-text">Dra og slipp elever for å endre lag manuelt.</p>
                 </div>
                 
-                <p class="info-text">Tips: Du kan dra og slippe elever mellom lagene hvis du vil justere manuelt.</p>
                 <div id="drawDisplay" class="draw-grid"></div>
                 
-                <div class="generate-section">
-                    <button class="btn-spectacular" onclick="generateSchedule()">📅 Generer Kampoppsett (Neste steg)</button>
+                <div class="generate-section no-print">
+                    <button class="btn-spectacular" onclick="generateSchedule()">📅 Generer Kampoppsett</button>
                 </div>
             </div>
         </div>
 
-        <!-- TAB 4: KAMPPLAN & PRINT -->
+        <!-- TAB 4: KAMPPLAN & RESULTATER -->
         <div id="schedule" class="tab-content">
-            <div class="container print-container">
+            <div class="container">
+                <!-- PRINT HEADER -->
                 <div class="print-header">
-                    <h1 id="printTitle">Kampoppsett</h1>
-                    <p>Noter resultater manuelt hvis det digitale systemet svikter.</p>
+                    <h1>Kampoppsett</h1>
                 </div>
 
                 <div class="schedule-actions no-print">
-                    <button onclick="window.print()" class="btn-grey"><i class="fas fa-print"></i> Skriv ut Dommerkort/Oppsett</button>
-                    <button onclick="clearSchedule()" class="btn-text-red">Slett oppsettet</button>
+                    <button onclick="window.print()" class="btn-grey"><i class="fas fa-print"></i> Skriv ut Kampplan</button>
+                    <button onclick="addManualMatch()" class="btn-text">+ Ekstra kamp</button>
+                    <button onclick="clearSchedule()" class="btn-text-red">Slett oppsett</button>
                 </div>
 
                 <div id="scheduleContainer"></div>
             </div>
         </div>
 
-        <!-- TAB 5: KAMPSTYRING (MANUELL KLOKKE) -->
+        <!-- TAB 5: KAMPSTYRING -->
         <div id="control" class="tab-content no-print">
             <div class="control-panel-wrapper">
                 <h1>KAMPSTYRING</h1>
-                <p>Denne siden brukes for å styre tiden i hallen. Start/Stopp manuelt.</p>
-                
                 <div class="timer-box">
                     <div id="mainTimer">15:00</div>
                 </div>
-
                 <div class="control-buttons">
                     <button onclick="timerStart()" class="btn-ctrl btn-green"><i class="fas fa-play"></i> START</button>
                     <button onclick="timerPause()" class="btn-ctrl btn-yellow"><i class="fas fa-pause"></i> PAUSE</button>
                     <button onclick="timerReset()" class="btn-ctrl btn-red"><i class="fas fa-undo"></i> RESET</button>
                 </div>
-
                 <div class="sound-buttons">
-                    <button onclick="playHornLong()" class="btn-sound large">📢 LANGT SIGNAL (SLUTT)</button>
-                    <button onclick="playHornShort()" class="btn-sound">🔔 KORT SIGNAL (START)</button>
+                    <button onclick="playHornLong()" class="btn-sound large">📢 LANGT SIGNAL</button>
+                    <button onclick="playHornShort()" class="btn-sound">🔔 KORT SIGNAL</button>
                 </div>
-
                 <div class="manual-adjust">
                     <button onclick="adjustTimer(1)" class="btn-small-grey">+1 Min</button>
                     <button onclick="adjustTimer(-1)" class="btn-small-grey">-1 Min</button>
@@ -207,16 +197,7 @@
             </div>
         </div>
 
-        <!-- TAB 6: RESULTATER -->
-        <div id="results" class="tab-content no-print">
-            <div class="container">
-                <h2>Registrer Resultater</h2>
-                <p>Her taster du inn resultatene fortløpende.</p>
-                <div id="resultsContainer"></div>
-            </div>
-        </div>
-
-        <!-- TAB 7: TABELL & FINALE -->
+        <!-- TAB 6: TABELL & FINALE -->
         <div id="finals" class="tab-content no-print">
             <div class="container">
                 <h2>Tabell</h2>
@@ -244,4 +225,4 @@
     <script src="script.js"></script>
 </body>
 </html>
-<!-- Version: #17 -->
+<!-- Version: #18 -->
