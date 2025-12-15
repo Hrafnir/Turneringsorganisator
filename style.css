@@ -1,4 +1,4 @@
-/* Version: #17 */
+/* Version: #18 */
 :root {
     --bg: #121212;
     --panel: #1e1e1e;
@@ -20,70 +20,39 @@ body {
     overflow-y: scroll;
 }
 
-/* =========================================
-   NAVIGASJON
-   ========================================= */
+/* NAV */
 nav {
-    background: var(--dark);
-    padding: 10px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    background: var(--dark); padding: 10px 20px;
+    display: flex; justify-content: space-between; align-items: center;
     border-bottom: 2px solid var(--accent);
 }
-
 .logo-area { display: flex; align-items: center; gap: 15px; }
 .logo { font-size: 1.2rem; font-weight: bold; color: var(--accent); text-transform: uppercase; }
 .title-input { background: #222; border: 1px solid #444; color: white; padding: 5px; border-radius: 4px; font-weight: bold; width: 250px; }
 .version { font-size: 0.7rem; color: #888; }
-
 .nav-actions { display: flex; gap: 15px; align-items: center; }
 .file-controls { display: flex; gap: 5px; }
 
 /* TABS */
 .tabs-bar {
-    background: #1a1a1a;
-    padding: 10px;
-    display: flex;
-    gap: 5px;
-    flex-wrap: wrap;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    background: #1a1a1a; padding: 10px; display: flex; gap: 5px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100;
 }
-
 .tabs-bar button {
-    background: #2a2a2a;
-    border: 1px solid #333;
-    color: #aaa;
-    padding: 10px 15px;
-    cursor: pointer;
-    border-radius: 4px;
-    font-weight: bold;
-    flex-grow: 1;
-    text-transform: uppercase;
-    font-size: 0.85rem;
-    transition: 0.2s;
+    background: #2a2a2a; border: 1px solid #333; color: #aaa; padding: 10px 15px;
+    cursor: pointer; border-radius: 4px; font-weight: bold; flex-grow: 1; text-transform: uppercase;
+    font-size: 0.85rem; transition: 0.2s;
 }
-
 .tabs-bar button:hover { background: #333; }
 .tabs-bar button.active { background: var(--accent); color: black; border-color: var(--accent); }
 .tabs-bar button.tab-highlight { border: 1px solid var(--red); color: var(--red); }
 .tabs-bar button.tab-highlight.active { background: var(--red); color: white; }
 
-/* =========================================
-   GENERELL LAYOUT & UI
-   ========================================= */
+/* CONTAINER & GENERAL */
 .container {
-    max-width: 1200px;
-    margin: 20px auto;
-    background: var(--panel);
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    max-width: 1200px; margin: 20px auto; background: var(--panel); padding: 30px;
+    border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
 }
-
 .tab-content { display: none; }
 .tab-content.active { display: block; animation: fadeIn 0.3s; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -91,73 +60,55 @@ nav {
 h1, h2, h3 { margin-top: 0; color: var(--accent); }
 p.small-info { color: #888; font-size: 0.9rem; font-style: italic; }
 
-/* Buttons */
+/* Buttons & Inputs */
 button { cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: 0.2s; }
 button:active { transform: scale(0.98); }
-
 .btn-primary { background: var(--blue); color: white; padding: 10px 20px; }
 .btn-green { background: var(--green); color: white; padding: 8px 12px; }
 .btn-red { background: var(--red); color: white; padding: 10px 20px; }
 .btn-yellow { background: #ffeb3b; color: #333; padding: 10px 20px; }
 .btn-grey { background: var(--grey); color: white; padding: 10px 20px; }
-.btn-spectacular { 
-    background: linear-gradient(135deg, var(--accent), #e65100); 
-    color: white; padding: 15px 40px; font-size: 1.2rem; 
-    box-shadow: 0 0 15px rgba(255, 152, 0, 0.4); 
-    display: block; margin: 20px auto; 
-}
+.btn-spectacular { background: linear-gradient(135deg, var(--accent), #e65100); color: white; padding: 15px 40px; font-size: 1.2rem; display: block; margin: 20px auto; }
 .btn-small-blue { background: #333; color: var(--blue); border: 1px solid var(--blue); padding: 5px 10px; font-size: 0.8rem; }
 .btn-small-red { background: #333; color: var(--red); border: 1px solid var(--red); padding: 5px 10px; font-size: 0.8rem; }
 .btn-small-grey { background: #333; border: 1px solid #555; color: #aaa; padding: 5px 10px; font-size: 0.8rem; }
 .btn-green-outline { background: transparent; border: 1px dashed var(--green); color: var(--green); width: 100%; padding: 10px; margin-top: 10px; }
+.btn-text { background: none; color: #aaa; text-decoration: underline; }
 .btn-text-red { background: none; color: var(--red); text-decoration: underline; padding: 0; }
 
-/* Inputs */
 input, textarea, select { 
-    background: #111; border: 1px solid #444; color: white; 
-    padding: 8px; border-radius: 4px; width: 100%; box-sizing: border-box; 
-    font-family: inherit;
+    background: #111; border: 1px solid #444; color: white; padding: 8px; 
+    border-radius: 4px; width: 100%; box-sizing: border-box; font-family: inherit;
 }
 input:focus { border-color: var(--accent); outline: none; }
 
-/* =========================================
-   TAB 1: SETUP
-   ========================================= */
+/* SETUP */
 .setup-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 30px; }
 .class-input-row { display: flex; gap: 10px; margin-bottom: 20px; }
 .class-buttons { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px; }
 .class-btn { background: #333; padding: 5px 10px; border-radius: 4px; cursor: pointer; color: #aaa; border: 1px solid #444; }
 .class-btn.selected { background: var(--blue); color: white; border-color: var(--blue); }
 textarea { height: 150px; resize: vertical; margin-bottom: 10px; }
-
 .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .student-grid { 
     display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; 
     max-height: 500px; overflow-y: auto; background: #111; padding: 10px; border-radius: 4px; border: 1px solid #333;
 }
-.student-item { 
-    background: #222; padding: 8px; border-radius: 4px; border-left: 3px solid #444; 
-    display: flex; justify-content: space-between; align-items: center; 
-}
+.student-item { background: #222; padding: 8px; border-radius: 4px; border-left: 3px solid #444; display: flex; justify-content: space-between; align-items: center; }
 .student-item.absent { opacity: 0.5; text-decoration: line-through; border-left-color: var(--red); }
 
-/* =========================================
-   TAB 2: ARENA
-   ========================================= */
+/* CONFIG */
 .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .config-box { background: #252525; padding: 20px; border-radius: 6px; }
 .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .form-row input { width: 100px; text-align: center; }
 .court-item { display: flex; gap: 10px; margin-bottom: 8px; }
 
-/* =========================================
-   TAB 3: DRAW (TEAMS)
-   ========================================= */
+/* TEAMS (DRAW) */
 .draw-controls { background: #252525; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-end; }
 .draw-option { display: flex; flex-direction: column; gap: 5px; }
 .custom-mix-panel { width: 100%; border-top: 1px dashed #444; padding-top: 10px; margin-top: 10px; }
 .checkbox-group { display: flex; gap: 15px; }
-
 .draw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
 .team-card { background: #252525; border: 1px solid #444; border-radius: 6px; overflow: hidden; }
 .team-card h3 { background: #151515; margin: 0; padding: 10px; text-align: center; font-size: 1.1rem; border-bottom: 1px solid #333; }
@@ -167,121 +118,80 @@ textarea { height: 150px; resize: vertical; margin-bottom: 10px; }
 .team-member.dragging { background: var(--blue); color: white; opacity: 0.8; }
 .team-card.drag-over { border: 2px dashed var(--blue); background: #2a2a2a; }
 
-/* =========================================
-   TAB 4: SCHEDULE & PRINT
-   ========================================= */
+/* SCHEDULE & RESULTS (Merged) */
 .schedule-actions { display: flex; justify-content: space-between; margin-bottom: 20px; padding: 10px; background: #222; border-radius: 4px; }
-.print-header { display: none; } /* Kun vis i print */
+.print-header { display: none; } 
 
-/* Schedule List Style */
 .match-round-block { margin-bottom: 30px; border: 1px solid #333; border-radius: 6px; overflow: hidden; }
 .match-round-header { background: #1a1a1a; padding: 10px; border-bottom: 1px solid #333; color: var(--blue); font-weight: bold; font-size: 1.1rem; }
 .match-item { 
-    display: grid; grid-template-columns: 100px 1fr 150px; 
+    display: grid; grid-template-columns: 120px 1fr 150px; 
     align-items: center; padding: 10px; background: #252525; border-bottom: 1px solid #333; 
 }
 .match-item:last-child { border-bottom: none; }
 .match-court { font-weight: bold; color: #888; font-size: 0.9rem; }
 .match-teams { font-size: 1.1rem; }
-.match-result-box { border: 1px solid #555; height: 30px; border-radius: 4px; background: #111; } /* Placeholder for print */
+.match-inputs { display: flex; gap: 5px; align-items: center; justify-content: flex-end; }
+.match-inputs input { width: 50px; text-align: center; font-size: 1.1rem; background: #111; border: 1px solid #444; }
 
-/* =========================================
-   TAB 5: KAMPSTYRING (CONTROL)
-   ========================================= */
+/* CONTROL */
 .control-panel-wrapper { text-align: center; max-width: 800px; margin: 0 auto; }
-.timer-box { 
-    background: black; border: 4px solid #333; border-radius: 20px; 
-    padding: 20px; margin: 30px 0; 
-    display: inline-block; min-width: 600px;
-}
-#mainTimer { 
-    font-family: 'Courier New', monospace; font-size: 12rem; 
-    color: var(--red); line-height: 1; font-weight: bold; text-shadow: 0 0 20px rgba(244,67,54,0.3);
-}
-
+.timer-box { background: black; border: 4px solid #333; border-radius: 20px; padding: 20px; margin: 30px 0; display: inline-block; min-width: 600px; }
+#mainTimer { font-family: 'Courier New', monospace; font-size: 12rem; color: var(--red); line-height: 1; font-weight: bold; text-shadow: 0 0 20px rgba(244,67,54,0.3); }
 .control-buttons { display: flex; justify-content: center; gap: 20px; margin-bottom: 30px; }
 .btn-ctrl { padding: 20px 40px; font-size: 1.5rem; border-radius: 50px; min-width: 150px; }
-
 .sound-buttons { display: flex; flex-direction: column; gap: 15px; align-items: center; margin-bottom: 30px; }
 .btn-sound { background: #333; color: white; padding: 15px; width: 100%; max-width: 400px; font-size: 1rem; border: 1px solid #555; }
 .btn-sound.large { font-size: 1.5rem; background: #444; border-color: #888; }
-.btn-sound:active { background: white; color: black; }
-
 .manual-adjust { display: flex; gap: 10px; justify-content: center; opacity: 0.5; transition: 0.3s; }
 .manual-adjust:hover { opacity: 1; }
 
-/* =========================================
-   TAB 6: RESULTATER
-   ========================================= */
-#resultsContainer { display: grid; gap: 15px; }
-.res-card { background: #252525; padding: 15px; border-radius: 6px; border-left: 5px solid var(--blue); display: flex; justify-content: space-between; align-items: center; }
-.res-info { font-weight: bold; }
-.res-inputs { display: flex; gap: 10px; align-items: center; }
-.res-inputs input { width: 60px; text-align: center; font-size: 1.2rem; }
-
-/* =========================================
-   TAB 7: FINALS
-   ========================================= */
+/* FINALS & TABLE */
 .leaderboard-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
 .leaderboard-table th { text-align: left; border-bottom: 2px solid #444; padding: 10px; color: #888; }
 .leaderboard-table td { border-bottom: 1px solid #333; padding: 10px; }
 .leaderboard-table tr:first-child td { color: var(--accent); font-weight: bold; }
-
 .final-setup-row { display: flex; gap: 10px; align-items: center; background: #222; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
 .finals-list { display: flex; flex-direction: column; gap: 10px; }
 .final-match-item { background: #333; padding: 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--accent); }
 
-/* =========================================
-   WINNER OVERLAY
-   ========================================= */
+/* WINNER OVERLAY */
 .winner-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .winner-overlay.hidden { display: none; }
-.trophy-icon { font-size: 10rem; color: #ffd700; margin-bottom: 20px; filter: drop-shadow(0 0 50px #ffd700); animation: float 3s ease-in-out infinite; }
+.trophy-icon { font-size: 10rem; color: #ffd700; margin-bottom: 20px; animation: float 3s ease-in-out infinite; }
 .winner-overlay h1 { font-size: 3rem; color: white; margin: 0; }
 .winner-overlay h2 { font-size: 6rem; color: var(--accent); margin: 10px 0; text-transform: uppercase; }
 @keyframes float { 0% { transform: translateY(0px); } 50% { transform: translateY(-20px); } 100% { transform: translateY(0px); } }
 
-/* =========================================
-   PRINT STYLES (CRITICAL)
-   ========================================= */
+/* PRINT STYLES */
 @media print {
-    /* Skjul alt "digitalt" */
     .no-print, nav, .tabs-bar, button, .input-section, .class-input-row, .config-box h3, .small-info { display: none !important; }
     
     body { background: white; color: black; font-size: 11pt; overflow: visible; }
     .container { box-shadow: none; padding: 0; margin: 0; max-width: 100%; border: none; }
-    
-    /* Vis kun print-containere */
     .print-container { display: block !important; }
+    
     .print-header { display: block !important; text-align: center; border-bottom: 2px solid black; margin-bottom: 20px; padding-bottom: 10px; }
     .print-header h1 { color: black; font-size: 24pt; margin: 0; }
     
-    /* Lagliste Print */
-    #draw .container { display: block; }
-    .draw-grid { 
-        display: grid; 
-        grid-template-columns: repeat(3, 1fr); 
-        gap: 15px; 
-    }
-    .team-card { 
-        background: white; border: 1px solid black; break-inside: avoid; page-break-inside: avoid; 
-        color: black; box-shadow: none;
-    }
+    /* Draw Grid Print */
+    .draw-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+    .team-card { background: white; border: 1px solid black; break-inside: avoid; page-break-inside: avoid; color: black; box-shadow: none; }
     .team-card h3 { background: #eee; color: black; border-bottom: 1px solid black; padding: 5px; font-size: 14pt; }
     .team-card h3 input { color: black; border: none; font-weight: bold; }
     .team-member { color: black; border-bottom: 1px solid #ccc; padding: 2px 5px; font-size: 10pt; }
-    .team-class-badge { border: 1px solid #000; color: black; padding: 0 4px; font-weight: bold; }
-
-    /* Kampoppsett Print (Tabell-stil) */
+    
+    /* Schedule Print */
     #scheduleContainer { display: block; }
     .match-round-block { border: 1px solid black; margin-bottom: 15px; break-inside: avoid; }
     .match-round-header { background: #ddd; color: black; border-bottom: 1px solid black; font-weight: bold; }
     .match-item { 
         background: white; color: black; border-bottom: 1px solid #000; 
-        grid-template-columns: 80px 1fr 100px; /* Mer plass til lag */
+        grid-template-columns: 80px 1fr 80px; 
         padding: 5px;
     }
     .match-court { color: #333; font-weight: normal; }
-    .match-result-box { border: 1px solid black; background: white; height: 25px; } /* Boks for å skrive i */
+    .match-inputs input { display: none; } /* Hide inputs on print */
+    .match-inputs::after { content: "___ - ___"; font-weight: bold; } /* Placeholder line */
 }
-/* Version: #17 */
+/* Version: #18 */
