@@ -1,1045 +1,86 @@
-/* Version: #16 */
+/* Version: #17 */
 
 // =============================================================
-// 1. GLOBAL DATA & STATE
+// 1. GLOBAL STATE
 // =============================================================
 window.data = {
-    title: "Turnering",
+    title: "Skoleturnering",
     classes: ["10A", "10B", "10C", "10D"],
-    students: [],
+    students: [], // {id, name, class, present}
     courts: [
         { id: 1, name: "Bane 1", type: "Volleyball" },
         { id: 2, name: "Bane 2", type: "Volleyball" },
         { id: 3, name: "Bane 3", type: "Stikkball" }
     ],
-    teams: [],
-    matches: [],
+    teams: [], // {id, name, members: []}
+    matches: [], // {id, t1, t2, court, type, s1, s2, done}
+    finals: [],
     settings: {
         startTime: "10:15",
         finalsTime: "14:00",
         matchDuration: 15,
         breakDuration: 5
     },
-    teamsLocked: false,
-    finalState: {
-        active: false,
-        t1: "Lag A",
-        t2: "Lag B",
-        s1: 0,
-        s2: 0,
-        title: "FINALE",
-        act: "Volleyball"
-    }
+    teamsLocked: false
 };
-
-// Audio context
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-let soundEnabled = true;
-let wakeLock = null;
 
 // Timer State
 let timerInterval = null;
-let timerSeconds = 900; // 15 min default
+let timerSeconds = 15 * 60;
 let isTimerRunning = false;
+
+// Audio Context
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 // Drag & Drop State
 let draggedMemberId = null;
 let draggedFromTeamId = null;
 
-// Dashboard UI State
-let dashFontSizeVW = 18;
-let isDashboardMode = false; // Flag to check if running as dashboard
-
 // =============================================================
 // 2. INITIALIZATION
 // =============================================================
 document.addEventListener("DOMContentLoaded", () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('mode') === 'dashboard') {
-        isDashboardMode = true;
-        initDashboard();
-    } else {
-        initAdmin();
-    }
-});
-
-// =============================================================
-// 3. ADMIN LOGIC (THE MASTER)
-// =============================================================
-
-function initAdmin() {
-    const adminView = document.getElementById('adminView');
-    const dashView = document.getElementById('dashboardView');
-    
-    if (adminView) adminView.style.display = 'block';
-    if (dashView) dashView.classList.add('hidden');
-
     loadLocal();
     renderClassButtons();
     renderStudentList();
     renderCourts();
-
-    if (window.data.teams.length > 0) renderTeams();
-    if (window.data.matches.length > 0) renderSchedule();
-    updateLeaderboard();
-
-    // Start System Clock Loop (Admin drives the sync)
-    setInterval(adminSystemTick, 1000);
-
-    // Listen for commands from Dashboard (Remote Control)
-    window.addEventListener('storage', (e) => {
-        if (e.key === 'ts_v16_command') {
-            const cmd = JSON.parse(e.newValue);
-            if (cmd) handleRemoteCommand(cmd);
-        }
-    });
-}
-
-// HANDLE COMMANDS FROM DASHBOARD
-function handleRemoteCommand(cmd) {
-    if (!cmd || !cmd.action) return;
-    console.log("Admin received command:", cmd.action);
-
-    switch (cmd.action) {
-        case 'START':
-            if (!isTimerRunning) startTimer();
-            break;
-        case 'PAUSE':
-            pauseTimer();
-            break;
-        case 'RESET':
-            resetTimer();
-            break;
-        case 'ADJUST':
-            adjustTimer(cmd.value); // cmd.value is minutes (+1 or -1)
-            break;
-        case 'HORN':
-            playHorn();
-            break;
+    
+    if(window.data.teams.length > 0) renderTeams();
+    if(window.data.matches.length > 0) {
+        renderSchedule();
+        renderResults();
     }
-    // Clear command after processing so we don't process it again on reload
-    localStorage.removeItem('ts_v16_command');
-}
+    updateLeaderboard();
+    
+    // Init timer display
+    updateTimerDisplay();
+});
 
-// --- PERSISTENCE ---
+// =============================================================
+// 3. PERSISTENCE & CORE UTILS
+// =============================================================
 window.saveLocal = function() {
-    localStorage.setItem('ts_v16_data', JSON.stringify(window.data));
-    localStorage.setItem('ts_v16_update_trigger', Date.now());
+    localStorage.setItem('ts_v17_data', JSON.stringify(window.data));
 };
 
 function loadLocal() {
-    const json = localStorage.getItem('ts_v16_data');
-    if (json) {
+    const json = localStorage.getItem('ts_v17_data');
+    if(json) {
         try {
             const parsed = JSON.parse(json);
             window.data = { ...window.data, ...parsed };
-        } catch (e) {
-            console.error("Data load error", e);
-        }
+        } catch(e) { console.error("Data load fail", e); }
     }
-    updateInputs();
-    updateTitleUI();
-}
-
-function updateInputs() {
-    ['startTime', 'finalsTime', 'matchDuration', 'breakDuration'].forEach(k => {
-        const el = document.getElementById(k);
-        if (el) el.value = window.data.settings[k];
-    });
-}
-
-function updateTitleUI() {
-    const disp = document.getElementById('displayTitle');
-    const inp = document.getElementById('tournamentTitleInput');
-    const prt = document.getElementById('printTitle');
-    if (disp) disp.innerText = window.data.title;
-    if (inp) inp.value = window.data.title;
-    if (prt) prt.innerText = window.data.title;
-}
-
-// --- SETUP TAB FUNCTIONS ---
-let selectedClass = "";
-
-window.renderClassButtons = function() {
-    const d = document.getElementById('classButtons');
-    if (!d) return;
-    d.innerHTML = '';
-    window.data.classes.forEach(c => {
-        const b = document.createElement('span');
-        b.className = `class-btn ${selectedClass === c ? 'selected' : ''}`;
-        b.innerHTML = `${c} <i class="fas fa-times del-cls" onclick="delClass('${c}', event)"></i>`;
-        b.onclick = () => { selectedClass = c; renderClassButtons(); };
-        d.appendChild(b);
-    });
-    if (!selectedClass && window.data.classes.length > 0) {
-        selectedClass = window.data.classes[0];
-        if (d.children.length > 0) d.children[0].classList.add('selected');
-    }
-    renderCustomMixCheckboxes();
-};
-
-window.addClass = function() {
-    const v = document.getElementById('newClassInput').value.trim().toUpperCase();
-    if (v && !window.data.classes.includes(v)) {
-        window.data.classes.push(v);
-        window.data.classes.sort();
-        saveLocal();
-        renderClassButtons();
-    }
-};
-
-window.delClass = function(c, e) {
-    e.stopPropagation();
-    if (confirm("Slett klasse?")) {
-        window.data.classes = window.data.classes.filter(x => x !== c);
-        saveLocal();
-        renderClassButtons();
-    }
-};
-
-window.addStudents = function() {
-    if (!selectedClass) return alert("Velg klasse først.");
-    const txt = document.getElementById('pasteArea').value;
-    const lines = txt.split('\n');
-    lines.forEach(l => {
-        const n = l.trim();
-        if (n) window.data.students.push({ id: genId(), name: n, class: selectedClass, present: true });
-    });
-    document.getElementById('pasteArea').value = "";
-    saveLocal();
-    renderStudentList();
-};
-
-window.renderStudentList = function() {
-    const l = document.getElementById('studentList');
-    if (!l) return;
-    l.innerHTML = '';
-
-    const query = document.getElementById('studentSearch').value.toLowerCase();
-    document.getElementById('studentCount').innerText = window.data.students.length;
-
-    let filtered = window.data.students.filter(s =>
-        s.name.toLowerCase().includes(query) || s.class.toLowerCase().includes(query)
-    );
-
-    filtered.sort((a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name));
-
-    filtered.forEach(s => {
-        const d = document.createElement('div');
-        d.className = `student-item ${s.present ? '' : 'absent'}`;
-        d.innerHTML = `
-            <span><b>${s.class}</b> ${s.name}</span>
-            <input type="checkbox" ${s.present ? 'checked' : ''} onchange="togglePres('${s.id}')">
-        `;
-        l.appendChild(d);
-    });
-};
-
-window.togglePres = function(id) {
-    const s = window.data.students.find(x => x.id == id);
-    if (s) {
-        s.present = !s.present;
-        saveLocal();
-        renderStudentList();
-    }
-};
-
-window.clearStudents = function() {
-    if (confirm("Slett alle elever?")) {
-        window.data.students = [];
-        saveLocal();
-        renderStudentList();
-    }
-};
-
-// --- ARENA TAB FUNCTIONS ---
-window.renderCourts = function() {
-    const l = document.getElementById('courtList');
-    if (!l) return;
-    l.innerHTML = '';
-    window.data.courts.forEach((c, i) => {
-        const d = document.createElement('div');
-        d.className = 'court-item';
-        d.innerHTML = `
-            <span>#${i + 1}</span>
-            <input value="${c.name}" onchange="updCourt(${i},'name',this.value)">
-            <input value="${c.type}" onchange="updCourt(${i},'type',this.value)">
-            <button class="btn-small-red" onclick="delCourt(${i})">X</button>
-        `;
-        l.appendChild(d);
-    });
-};
-
-window.addCourt = function() {
-    window.data.courts.push({ id: Date.now(), name: `Bane ${window.data.courts.length + 1}`, type: "Volleyball" });
-    saveLocal();
-    renderCourts();
-};
-
-window.updCourt = function(i, f, v) { window.data.courts[i][f] = v; saveLocal(); };
-window.delCourt = function(i) { window.data.courts.splice(i, 1); saveLocal(); renderCourts(); };
-
-['startTime', 'finalsTime', 'matchDuration', 'breakDuration'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', e => {
-        window.data.settings[id] = e.target.value;
-        saveLocal();
-    });
-});
-
-// --- TEAMS & DRAW FUNCTIONS ---
-window.toggleCustomMix = function() {
-    const s = document.getElementById('drawStrategy').value;
-    const panel = document.getElementById('customMixPanel');
-    if (panel) panel.classList.toggle('hidden', s !== 'custom');
-};
-
-window.renderCustomMixCheckboxes = function() {
-    const d = document.getElementById('customClassCheckboxes');
-    if (!d) return;
-    d.innerHTML = '';
-    window.data.classes.forEach(c => {
-        d.innerHTML += `<div><input type="checkbox" value="${c}" id="chk_${c}"><label for="chk_${c}">${c}</label></div>`;
-    });
-};
-
-function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-}
-
-window.generateTeams = function() {
-    if (window.data.teamsLocked) return alert("Lagene er låst. Lås opp først.");
-
-    const count = parseInt(document.getElementById('teamCount').value);
-    const strategy = document.getElementById('drawStrategy').value;
-    const pool = window.data.students.filter(s => s.present);
-
-    window.data.teams = Array.from({ length: count }, (_, i) => ({
-        id: i + 1,
-        name: `Lag ${i + 1}`,
-        members: [],
-        points: 0,
-        stats: { gf: 0, ga: 0, w: 0, d: 0, l: 0 }
-    }));
-
-    if (strategy === 'balanced') {
-        let buckets = {};
-        window.data.classes.forEach(c => {
-            buckets[c] = pool.filter(s => s.class === c);
-            shuffle(buckets[c]);
-        });
-
-        let deck = [];
-        let active = true;
-        while (active) {
-            active = false;
-            window.data.classes.forEach(c => {
-                if (buckets[c] && buckets[c].length > 0) {
-                    deck.push(buckets[c].pop());
-                    active = true;
-                }
-            });
-        }
-        deck.forEach((student, index) => {
-            window.data.teams[index % count].members.push(student);
-        });
-    } else if (strategy === 'class_based') {
-        let byClass = {};
-        window.data.classes.forEach(c => byClass[c] = []);
-        pool.forEach(s => { if (byClass[s.class]) byClass[s.class].push(s); });
-
-        let teamsPerClass = Math.ceil(count / window.data.classes.length);
-        let currentTeam = 0;
-
-        for (let c of window.data.classes) {
-            shuffle(byClass[c]);
-            let startTeam = currentTeam;
-            let endTeam = Math.min(currentTeam + teamsPerClass, count);
-            let localTIdx = startTeam;
-
-            while (byClass[c].length > 0) {
-                window.data.teams[localTIdx].members.push(byClass[c].pop());
-                localTIdx++;
-                if (localTIdx >= endTeam) localTIdx = startTeam;
-            }
-            currentTeam = endTeam;
-        }
-    } else if (strategy === 'random') {
-        shuffle(pool);
-        pool.forEach((s, i) => window.data.teams[i % count].members.push(s));
-    } else {
-        let group1Classes = [];
-        if (strategy === 'ab_cd') {
-            const mid = Math.ceil(window.data.classes.length / 2);
-            group1Classes = window.data.classes.slice(0, mid);
-        } else {
-            document.querySelectorAll('#customClassCheckboxes input:checked').forEach(cb => group1Classes.push(cb.value));
-        }
-
-        const pool1 = pool.filter(s => group1Classes.includes(s.class));
-        const pool2 = pool.filter(s => !group1Classes.includes(s.class));
-
-        const teams1 = window.data.teams.slice(0, Math.ceil(count / 2));
-        const teams2 = window.data.teams.slice(Math.ceil(count / 2));
-
-        shuffle(pool1); pool1.forEach((s, i) => teams1[i % teams1.length].members.push(s));
-        shuffle(pool2); pool2.forEach((s, i) => teams2[i % teams2.length].members.push(s));
-    }
-
-    saveLocal();
-    renderTeams();
-};
-
-window.renderTeams = function() {
-    const d = document.getElementById('drawDisplay');
-    if (!d) return;
-    d.innerHTML = '';
-
-    window.data.teams.forEach(t => {
-        const card = document.createElement('div');
-        card.className = 'team-card';
-        card.ondragover = window.handleDragOver;
-        card.ondragleave = window.handleDragLeave;
-        card.ondrop = (e) => window.handleDrop(e, t.id);
-
-        const mems = t.members.map((m, i) => `
-            <div class="team-member" draggable="true" ondragstart="handleDragStart(event, '${m.id}', ${t.id})">
-                <span>${i + 1}. ${m.name}</span>
-                <span class="team-class-badge">${m.class}</span>
-            </div>
-        `).join('');
-
-        card.innerHTML = `
-            <h3><input value="${t.name}" onchange="renameTeam(${t.id},this.value)"></h3>
-            <div>${mems}</div>
-        `;
-        d.appendChild(card);
-    });
-
-    const l = document.getElementById('lockBtn');
-    if (l) {
-        l.className = window.data.teamsLocked ? 'btn-small-red' : 'btn-yellow';
-        l.innerHTML = window.data.teamsLocked ? '<i class="fas fa-lock"></i> Låst' : '<i class="fas fa-unlock"></i> Åpen';
-    }
-};
-
-window.renameTeam = function(id, v) {
-    const t = window.data.teams.find(t => t.id == id);
-    if (t) { t.name = v; saveLocal(); updateLeaderboard(); }
-};
-
-window.toggleLockTeams = function() {
-    window.data.teamsLocked = !window.data.teamsLocked;
-    saveLocal();
-    renderTeams();
-};
-
-// --- DRAG & DROP LOGIC ---
-window.handleDragStart = function(e, memberId, teamId) {
-    if (window.data.teamsLocked) { e.preventDefault(); return; }
-    draggedMemberId = memberId;
-    draggedFromTeamId = teamId;
-    e.dataTransfer.effectAllowed = "move";
-    e.target.classList.add('dragging');
-};
-
-window.handleDragOver = function(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    e.currentTarget.classList.add('drag-over');
-};
-
-window.handleDragLeave = function(e) {
-    e.currentTarget.classList.remove('drag-over');
-};
-
-window.handleDrop = function(e, targetTeamId) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
-
-    const sourceTeam = window.data.teams.find(t => t.id === draggedFromTeamId);
-    const targetTeam = window.data.teams.find(t => t.id === targetTeamId);
-
-    if (sourceTeam && targetTeam && sourceTeam !== targetTeam) {
-        const memberIndex = sourceTeam.members.findIndex(m => m.id === draggedMemberId);
-        if (memberIndex > -1) {
-            const member = sourceTeam.members.splice(memberIndex, 1)[0];
-            targetTeam.members.push(member);
-            saveLocal();
-            renderTeams();
-        }
-    }
-    document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
-    draggedMemberId = null;
-    draggedFromTeamId = null;
-};
-
-// --- SCHEDULE & MATCHES ---
-window.generateSchedule = function() {
-    if (!window.data.teamsLocked) toggleLockTeams();
-    if (window.data.courts.length === 0) return alert("Ingen baner definert i 'Arena'.");
-
-    window.data.matches = [];
-    let time = new Date(`2000-01-01T${window.data.settings.startTime}`);
-    const endTime = new Date(`2000-01-01T${window.data.settings.finalsTime}`);
-    const slotDur = parseInt(window.data.settings.matchDuration) + parseInt(window.data.settings.breakDuration);
-
-    let tIds = window.data.teams.map(t => t.id);
-    if (tIds.length % 2 !== 0) tIds.push(null);
-
-    let pairs = [];
-    for (let r = 0; r < tIds.length - 1; r++) {
-        for (let i = 0; i < tIds.length / 2; i++) {
-            const a = tIds[i];
-            const b = tIds[tIds.length - 1 - i];
-            if (a && b) pairs.push({ t1: a, t2: b });
-        }
-        tIds.splice(1, 0, tIds.pop());
-    }
-
-    while (time < endTime && pairs.length > 0) {
-        let active = [];
-        window.data.courts.forEach(c => {
-            if (pairs.length > 0) {
-                const idx = pairs.findIndex(p => !active.some(a => a.t1 == p.t1 || a.t2 == p.t1 || a.t1 == p.t2 || a.t2 == p.t2));
-                if (idx > -1) {
-                    const p = pairs.splice(idx, 1)[0];
-                    active.push({ ...p, c: c.name, type: c.type });
-                }
-            }
-        });
-
-        const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        active.forEach(m => {
-            window.data.matches.push({
-                id: genId(),
-                time: timeStr,
-                t1: m.t1,
-                t2: m.t2,
-                court: m.c,
-                type: m.type,
-                s1: null,
-                s2: null,
-                done: false
-            });
-        });
-        time.setMinutes(time.getMinutes() + slotDur);
-    }
-    saveLocal();
-    renderSchedule();
-};
-
-window.renderSchedule = function() {
-    const c = document.getElementById('scheduleContainer');
-    if (!c) return;
-    c.innerHTML = '';
-
-    const groups = {};
-    window.data.matches.sort((a, b) => a.time.localeCompare(b.time));
-    window.data.matches.forEach(m => {
-        if (!groups[m.time]) groups[m.time] = [];
-        groups[m.time].push(m);
-    });
-
-    for (let time in groups) {
-        const blk = document.createElement('div');
-        blk.className = 'match-block';
-        blk.innerHTML = `
-            <div class="block-header">
-                <span class="block-time">Kl ${time}</span>
-                <button class="btn-text-red" onclick="delBlock('${time}')">Slett bolk</button>
-            </div>
-        `;
-        groups[time].forEach(m => {
-            const t1 = window.data.teams.find(t => t.id == m.t1);
-            const t2 = window.data.teams.find(t => t.id == m.t2);
-            if (!t1 || !t2) return;
-            const row = document.createElement('div');
-            row.className = 'match-row';
-            row.innerHTML = `
-                <div class="match-court-badge">${m.court}<br><small>${m.type}</small></div>
-                <div class="match-teams">${t1.name} vs ${t2.name}</div>
-                <div class="match-score">
-                    <input type="number" value="${m.s1 ?? ''}" onchange="updScore('${m.id}','s1',this.value)"> - 
-                    <input type="number" value="${m.s2 ?? ''}" onchange="updScore('${m.id}','s2',this.value)">
-                </div>
-            `;
-            blk.appendChild(row);
-        });
-        c.appendChild(blk);
-    }
-};
-
-window.updScore = function(id, f, v) {
-    const m = window.data.matches.find(x => x.id == id);
-    m[f] = v === '' ? null : parseInt(v);
-    m.done = (m.s1 !== null && m.s2 !== null);
-    saveLocal();
-    updateLeaderboard();
-};
-
-window.delBlock = function(time) {
-    if (confirm("Slett alle kamper kl " + time + "?")) {
-        window.data.matches = window.data.matches.filter(m => m.time !== time);
-        saveLocal();
-        renderSchedule();
-    }
-};
-
-window.addManualMatch = function() {
-    if (window.data.teams.length === 0) return;
-    const t = window.data.teams[0];
-    window.data.matches.push({
-        id: genId(),
-        time: "12:00",
-        t1: t.id,
-        t2: t.id,
-        court: "Manuell",
-        type: "Ekstra",
-        s1: null,
-        s2: null,
-        done: false
-    });
-    saveLocal();
-    renderSchedule();
-};
-
-window.clearSchedule = function() {
-    if (confirm("Slett alle kamper?")) {
-        window.data.matches = [];
-        saveLocal();
-        renderSchedule();
-        updateLeaderboard();
-    }
-};
-
-// --- DRIFTSKONTROLL (TIME MANAGEMENT) ---
-window.recalcFutureSchedule = function() {
-    if (window.data.matches.length === 0) return alert("Ingen kamper.");
-    let times = [...new Set(window.data.matches.map(m => m.time))].sort();
-    const now = new Date();
-    const curTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    let futureTimes = times.filter(t => t >= curTimeStr);
-
-    if (futureTimes.length === 0) return alert("Ingen fremtidige kamper.");
-    if (!confirm(`Oppdater tider for ${futureTimes.length} bolker?`)) return;
-
-    const slotDur = parseInt(window.data.settings.matchDuration) + parseInt(window.data.settings.breakDuration);
-    let [h, m] = futureTimes[0].split(':').map(Number);
-    let baseDate = new Date(); baseDate.setHours(h, m, 0);
-
-    futureTimes.forEach(oldTime => {
-        const newTimeStr = baseDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        window.data.matches.forEach(match => { if (match.time === oldTime) match.time = newTimeStr; });
-        baseDate.setMinutes(baseDate.getMinutes() + slotDur);
-    });
-    saveLocal();
-    renderSchedule();
-};
-
-window.startNextRoundNow = function() {
-    const remainingMatches = window.data.matches.filter(m => !m.done).sort((a, b) => a.time.localeCompare(b.time));
-    if (remainingMatches.length === 0) return alert("Ingen gjenstående kamper.");
-
-    const nextBlockTime = remainingMatches[0].time;
-    const now = new Date();
-    now.setMinutes(now.getMinutes() + 2);
-    const newStartStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    if (!confirm(`Flytt runde ${nextBlockTime} til ${newStartStr}?`)) return;
-
-    const [h1, m1] = nextBlockTime.split(':').map(Number);
-    const [h2, m2] = newStartStr.split(':').map(Number);
-    const oldDate = new Date(); oldDate.setHours(h1, m1, 0);
-    const newDate = new Date(); newDate.setHours(h2, m2, 0);
-    const diffMs = newDate - oldDate;
-    const diffMins = Math.round(diffMs / 60000);
-
-    shiftSchedule(diffMins);
-};
-
-window.shiftSchedule = function(minutes) {
-    if (window.data.matches.length === 0) return;
-
-    const remainingMatches = window.data.matches.filter(m => !m.done).sort((a, b) => a.time.localeCompare(b.time));
-    if (remainingMatches.length === 0) return alert("Ingen kamper å flytte.");
-
-    const firstTime = remainingMatches[0].time;
-    let distinctTimes = [...new Set(window.data.matches.map(m => m.time))].sort();
-    let timesToShift = distinctTimes.filter(t => t >= firstTime);
-
-    timesToShift.forEach(oldTime => {
-        let [h, m] = oldTime.split(':').map(Number);
-        let d = new Date(); d.setHours(h, m + minutes, 0);
-        let newTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        window.data.matches.forEach(match => {
-            if (match.time === oldTime) match.time = newTime;
-        });
-    });
-
-    saveLocal();
-    renderSchedule();
-    alert(`Tidsplan justert med ${minutes} minutter.`);
-};
-
-// --- LEADERBOARD & FINALS ---
-window.updateLeaderboard = function() {
-    window.data.teams.forEach(t => { t.points = 0; t.stats = { gf: 0, ga: 0, w: 0, d: 0, l: 0 }; });
-
-    window.data.matches.forEach(m => {
-        if (m.done) {
-            const t1 = window.data.teams.find(t => t.id == m.t1);
-            const t2 = window.data.teams.find(t => t.id == m.t2);
-            if (t1 && t2) {
-                t1.stats.gf += m.s1; t1.stats.ga += m.s2;
-                t2.stats.gf += m.s2; t2.stats.ga += m.s1;
-
-                if (m.s1 > m.s2) { t1.points += 3; t1.stats.w++; }
-                else if (m.s2 > m.s1) { t2.points += 3; t2.stats.w++; }
-                else { t1.points += 1; t2.points += 1; t1.stats.d++; t2.stats.d++; }
-            }
-        }
-    });
-
-    window.data.teams.sort((a, b) => b.points - a.points || (b.stats.gf - b.stats.ga) - (a.stats.gf - a.stats.ga));
-
-    const s1 = document.getElementById('finalTeam1');
-    const s2 = document.getElementById('finalTeam2');
-    if (s1 && s2) {
-        const html = window.data.teams.map((t, i) => `<option value="${t.id}">${i + 1}. ${t.name} (${t.points}p)</option>`).join('');
-        const v1 = s1.value; const v2 = s2.value;
-        s1.innerHTML = html; s2.innerHTML = html;
-        if (v1) s1.value = v1;
-        if (v2) s2.value = v2; else if (window.data.teams.length > 1) s2.selectedIndex = 1;
-    }
-
-    const mb = document.getElementById('miniLeaderboard');
-    if (mb) mb.innerHTML = window.data.teams.slice(0, 8).map((t, i) => `<tr><td>${i + 1}</td><td>${t.name}</td><td>${t.points}</td></tr>`).join('');
-};
-
-window.activateFinalMode = function() {
-    const t1 = window.data.teams.find(t => t.id == document.getElementById('finalTeam1').value);
-    const t2 = window.data.teams.find(t => t.id == document.getElementById('finalTeam2').value);
-
-    window.data.finalState.active = true;
-    window.data.finalState.t1 = t1.name;
-    window.data.finalState.t2 = t2.name;
-    window.data.finalState.title = document.getElementById('finalType').value;
-    window.data.finalState.act = document.getElementById('finalAct').value;
-    window.data.finalState.s1 = 0;
-    window.data.finalState.s2 = 0;
-
-    resetTimer();
-    document.getElementById('adminStageT1').innerText = t1.name;
-    document.getElementById('adminStageT2').innerText = t2.name;
-    document.getElementById('adminStageS1').value = 0;
-    document.getElementById('adminStageS2').value = 0;
-    saveLocal();
-};
-
-window.exitFinalMode = function() {
-    window.data.finalState.active = false;
-    saveLocal();
-};
-
-window.syncFinalScore = function() {
-    window.data.finalState.s1 = parseInt(document.getElementById('adminStageS1').value);
-    window.data.finalState.s2 = parseInt(document.getElementById('adminStageS2').value);
-    saveLocal();
-};
-
-window.endTournament = function() {
-    const s1 = window.data.finalState.s1;
-    const s2 = window.data.finalState.s2;
-    let w = "UAVGJORT";
-    if (s1 > s2) w = window.data.finalState.t1;
-    if (s2 > s1) w = window.data.finalState.t2;
-
-    document.getElementById('winnerText').innerText = w;
-    document.getElementById('winnerOverlay').classList.remove('hidden');
-};
-
-window.closeWinner = function() {
-    document.getElementById('winnerOverlay').classList.add('hidden');
-};
-
-// --- SYSTEM SYNC & TIMERS ---
-function adminSystemTick() {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-    const el = document.getElementById('adminRealTime');
-    if (el) el.innerText = timeStr;
-
-    const shortTime = timeStr.substr(0, 5);
-    const activeMatches = getMatchesAtTime(shortTime);
-    const nextMatches = getNextMatches(shortTime);
-
-    let startTimeDisplay = "--:--";
-    if (activeMatches.length > 0) {
-        const mObj = window.data.matches.find(m => m.t1 === activeMatches[0].t1 || m.t2 === activeMatches[0].t1);
-        if (mObj) startTimeDisplay = "KAMPSTART: KL " + mObj.time;
-    } else if (nextMatches.length > 0) {
-        startTimeDisplay = "NESTE KAMP: KL " + nextMatches[0].time;
-    }
-
-    const syncObj = {
-        timer: timerSeconds,
-        running: isTimerRunning,
-        activeMatches: activeMatches,
-        nextMatches: nextMatches,
-        finalMode: window.data.finalState.active,
-        finalState: window.data.finalState,
-        title: window.data.title,
-        startTimeDisplay: startTimeDisplay
-    };
-
-    localStorage.setItem('ts_v16_dashboard_sync', JSON.stringify(syncObj));
-}
-
-function getMatchesAtTime(shortTime) {
-    const sorted = [...window.data.matches].sort((a, b) => a.time.localeCompare(b.time));
-    let currentBlockTime = null;
-    for (let m of sorted) {
-        if (m.time <= shortTime) currentBlockTime = m.time;
-        else break;
-    }
-    if (!currentBlockTime) return [];
-
-    return sorted.filter(m => m.time === currentBlockTime).map(m => {
-        const t1 = window.data.teams.find(t => t.id == m.t1);
-        const t2 = window.data.teams.find(t => t.id == m.t2);
-        return {
-            court: m.court, type: m.type,
-            t1: t1 ? t1.name : '?', t2: t2 ? t2.name : '?',
-            s1: m.s1, s2: m.s2
-        };
-    });
-}
-
-function getNextMatches(shortTime) {
-    const sorted = [...window.data.matches].sort((a, b) => a.time.localeCompare(b.time));
-    const future = sorted.filter(m => m.time > shortTime);
-    if (future.length === 0) return [];
-    const nextBlockTime = future[0].time;
-    return future.filter(m => m.time === nextBlockTime).map(m => {
-        const t1 = window.data.teams.find(t => t.id == m.t1);
-        const t2 = window.data.teams.find(t => t.id == m.t2);
-        return {
-            time: m.time, court: m.court,
-            t1: t1 ? t1.name : '?', t2: t2 ? t2.name : '?'
-        };
-    });
-}
-
-// =============================================================
-// TIMER CONTROL LOGIC (MASTER)
-// =============================================================
-
-// Start (either from local click or remote command)
-window.startTimer = function() {
-    // 1. Play Sound (if possible)
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    playHorn();
-
-    // 2. Logic
-    if (isTimerRunning) return;
-    isTimerRunning = true;
-    timerInterval = setInterval(() => {
-        timerSeconds--;
-        updateAdminTimerUI();
-        if (timerSeconds <= 0) {
-            pauseTimer();
-            playHorn();
-            isTimerRunning = false;
-        }
-    }, 1000);
-};
-
-window.pauseTimer = function() {
-    clearInterval(timerInterval);
-    isTimerRunning = false;
-};
-
-window.resetTimer = function() {
-    pauseTimer();
-    timerSeconds = parseInt(window.data.settings.matchDuration) * 60;
-    updateAdminTimerUI();
-};
-
-window.adjustTimer = function(min) {
-    timerSeconds += (min * 60);
-    if (timerSeconds < 0) timerSeconds = 0;
-    updateAdminTimerUI();
-};
-
-function updateAdminTimerUI() {
-    const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
-    const s = (timerSeconds % 60).toString().padStart(2, '0');
-    const el = document.getElementById('adminTimerDisplay');
-    if (el) el.innerText = `${m}:${s}`;
-}
-
-window.playHorn = function() {
-    const osc = audioCtx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 150;
-    const osc2 = audioCtx.createOscillator(); osc2.type = 'square'; osc2.frequency.value = 148;
-    const g = audioCtx.createGain();
-    osc.connect(g); osc2.connect(g); g.connect(audioCtx.destination);
-    g.gain.setValueAtTime(1, audioCtx.currentTime);
-    g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 2.5);
-    osc.start(); osc2.start(); osc.stop(audioCtx.currentTime + 2.5); osc2.stop(audioCtx.currentTime + 2.5);
-};
-
-// =============================================================
-// 4. DASHBOARD LOGIC (THE SLAVE / REMOTE)
-// =============================================================
-
-function initDashboard() {
-    document.getElementById('adminView').classList.add('hidden');
-    document.getElementById('adminView').style.display = 'none';
-    document.getElementById('dashboardView').classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    setInterval(dashboardTick, 200);
-}
-
-// SEND COMMAND TO MASTER
-window.sendCommand = function(action, value) {
-    const cmd = { action: action, value: value, timestamp: Date.now() };
-    localStorage.setItem('ts_v16_command', JSON.stringify(cmd));
-    // Optimistic UI update could happen here, but we rely on fast sync
-};
-
-// Resizing
-window.resizeDashText = function(dir) {
-    dashFontSizeVW += dir;
-    if (dashFontSizeVW < 5) dashFontSizeVW = 5;
-    if (dashFontSizeVW > 40) dashFontSizeVW = 40;
-    const el = document.getElementById('dashTimer');
-    if (el) el.style.fontSize = dashFontSizeVW + "vw";
-};
-
-// Override controls in Dashboard to send commands instead of running logic
-if (isDashboardMode) {
-    // Redefine global functions for the dashboard context
-    window.startTimer = function() { sendCommand('START'); };
-    window.pauseTimer = function() { sendCommand('PAUSE'); };
-    window.resetTimer = function() { sendCommand('RESET'); }; // Not really used on dash, but safety
-    window.adjustTimer = function(min) { sendCommand('ADJUST', min); };
-    window.playHorn = function() { 
-        // Play locally immediately for feedback
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const osc = audioCtx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 150;
-        const g = audioCtx.createGain(); osc.connect(g); g.connect(audioCtx.destination);
-        g.gain.setValueAtTime(1, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.0);
-        osc.start(); osc.stop(audioCtx.currentTime + 1.0);
-        // AND tell master to play
-        sendCommand('HORN'); 
-    };
-}
-
-function dashboardTick() {
-    const json = localStorage.getItem('ts_v16_dashboard_sync');
-    if (json) {
-        const sync = JSON.parse(json);
-        updateDashUI(sync);
-    }
-}
-
-// SAFE TEXT HELPER
-function safeText(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.innerText = text;
-}
-
-function updateDashUI(sync) {
-    const now = new Date();
-    safeText('dashClock', now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    // Update inputs
+    document.getElementById('displayTitle').innerText = window.data.title;
+    document.getElementById('tournamentTitleInput').value = window.data.title;
+    document.getElementById('printTitle').innerText = window.data.title;
     
-    if (sync.finalMode) {
-        document.getElementById('dashSeriesMode').classList.add('hidden');
-        document.getElementById('dashFinalMode').classList.remove('hidden');
-        const fs = sync.finalState;
-
-        safeText('dashFinalTitle', fs.title);
-        safeText('dashFinalAct', fs.act);
-        safeText('dashFinalT1', fs.t1);
-        safeText('dashFinalT2', fs.t2);
-        safeText('dashFinalS1', fs.s1);
-        safeText('dashFinalS2', fs.s2);
-
-        const m = Math.floor(sync.timer / 60).toString().padStart(2, '0');
-        const s = (sync.timer % 60).toString().padStart(2, '0');
-        const el = document.getElementById('dashFinalTimer');
-        if(el) {
-            el.innerText = `${m}:${s}`;
-            el.style.color = sync.running ? '#4caf50' : '#f44336';
-        }
-
-    } else {
-        document.getElementById('dashFinalMode').classList.add('hidden');
-        document.getElementById('dashSeriesMode').classList.remove('hidden');
-
-        const m = Math.floor(sync.timer / 60).toString().padStart(2, '0');
-        const s = (sync.timer % 60).toString().padStart(2, '0');
-        const dTimer = document.getElementById('dashTimer');
-        const dStatus = document.getElementById('dashStatus');
-
-        if(dTimer) dTimer.innerText = `${m}:${s}`;
-
-        if(dTimer && dStatus) {
-            if (sync.running) {
-                dTimer.style.color = '#4caf50';
-                dStatus.innerText = "KAMP PÅGÅR";
-                dStatus.style.background = "#1b5e20";
-            } else if (sync.timer === 0) {
-                dTimer.style.color = '#f44336';
-                dStatus.innerText = "TIDEN ER UTE";
-                dStatus.style.background = "#b71c1c";
-            } else {
-                dTimer.style.color = '#ff9800';
-                dStatus.innerText = "KLAR / PAUSE";
-                dStatus.style.background = "#333";
-            }
-        }
-
-        safeText('dashStartTime', sync.startTimeDisplay || "");
-
-        const amBox = document.getElementById('dashActiveMatches');
-        if(amBox) {
-            if (sync.activeMatches.length === 0) {
-                amBox.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">Ingen aktive kamper</div>';
-            } else {
-                amBox.innerHTML = sync.activeMatches.map(m => `
-                    <div class="dash-match-card">
-                        <div class="dm-row-top"><span class="dm-court">${m.court}</span><span class="dm-type">${m.type}</span></div>
-                        <div class="dm-teams">${m.t1} vs ${m.t2}</div>
-                        <div class="dm-score">${m.s1 != null ? m.s1 : '-'} - ${m.s2 != null ? m.s2 : '-'}</div>
-                    </div>`).join('');
-            }
-        }
-
-        const nmBox = document.getElementById('dashNextMatches');
-        if(nmBox) {
-            if (sync.nextMatches.length === 0) {
-                nmBox.innerHTML = '<div style="text-align:center;color:#555;">Ingen flere kamper</div>';
-            } else {
-                nmBox.innerHTML = sync.nextMatches.map(m => `
-                    <div class="dash-next-card">
-                        <span class="dnm-time">${m.time}</span>
-                        <span>${m.court}: ${m.t1} vs ${m.t2}</span>
-                    </div>`).join('');
-            }
-        }
-    }
+    ['startTime','finalsTime','matchDuration','breakDuration'].forEach(k => {
+        const el = document.getElementById(k);
+        if(el) el.value = window.data.settings[k];
+    });
 }
-
-// --- 5. UTILS ---
-window.genId = function() { return Math.random().toString(36).substr(2, 9); };
 
 window.updateTitle = function(val) {
     window.data.title = val;
@@ -1048,68 +89,787 @@ window.updateTitle = function(val) {
     saveLocal();
 };
 
-window.toggleWakeLock = async function() {
-    const btn = document.getElementById('wakeLockBtn');
-    if (wakeLock !== null) {
-        wakeLock.release().then(() => {
-            wakeLock = null;
-            btn.classList.remove('active');
-            btn.innerHTML = '<i class="fas fa-eye"></i> Skjerm: Auto';
-        });
-    } else {
-        try {
-            wakeLock = await navigator.wakeLock.request('screen');
-            btn.classList.add('active');
-            btn.innerHTML = '<i class="fas fa-eye"></i> Skjerm: PÅ (Låst)';
-        } catch (err) {
-            alert("Wake Lock feilet. (Krever HTTPS?)");
-        }
+window.genId = function() { 
+    return Math.random().toString(36).substr(2, 9); 
+};
+
+window.confirmReset = function() {
+    if(confirm("Er du sikker på at du vil slette ALT?")) {
+        localStorage.removeItem('ts_v17_data');
+        location.reload();
     }
 };
 
-window.openDashboard = function() {
-    const url = window.location.href.split('?')[0] + '?mode=dashboard';
-    window.open(url, 'TurneringsDashboard', 'width=1280,height=720');
+window.showTab = function(id) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tabs-bar button').forEach(el => el.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    // Highlight correct button
+    const btns = document.querySelectorAll('.tabs-bar button');
+    const map = {'setup':0,'arena':1,'draw':2,'schedule':3,'control':4,'results':5,'finals':6};
+    if(map[id] !== undefined) btns[map[id]].classList.add('active');
 };
 
+// =============================================================
+// 4. SETUP: STUDENTS & CLASSES
+// =============================================================
+let selectedClass = "";
+
+window.renderClassButtons = function() {
+    const d = document.getElementById('classButtons');
+    d.innerHTML = '';
+    window.data.classes.forEach(c => {
+        const btn = document.createElement('span');
+        btn.className = `class-btn ${selectedClass === c ? 'selected' : ''}`;
+        btn.innerHTML = `${c} <i class="fas fa-times del-cls" onclick="delClass('${c}', event)"></i>`;
+        btn.onclick = () => { selectedClass = c; renderClassButtons(); };
+        d.appendChild(btn);
+    });
+    if(!selectedClass && window.data.classes.length > 0) {
+        selectedClass = window.data.classes[0];
+        renderClassButtons();
+    }
+    renderCustomMixCheckboxes();
+};
+
+window.addClass = function() {
+    const val = document.getElementById('newClassInput').value.trim().toUpperCase();
+    if(val && !window.data.classes.includes(val)) {
+        window.data.classes.push(val);
+        window.data.classes.sort();
+        saveLocal();
+        renderClassButtons();
+    }
+};
+
+window.delClass = function(c, e) {
+    e.stopPropagation();
+    if(confirm(`Slette klassen ${c}?`)) {
+        window.data.classes = window.data.classes.filter(x => x !== c);
+        if(selectedClass === c) selectedClass = "";
+        saveLocal();
+        renderClassButtons();
+    }
+};
+
+window.addStudents = function() {
+    if(!selectedClass) return alert("Velg en klasse først.");
+    const txt = document.getElementById('pasteArea').value;
+    const lines = txt.split('\n');
+    lines.forEach(line => {
+        const name = line.trim();
+        if(name) {
+            window.data.students.push({
+                id: genId(),
+                name: name,
+                class: selectedClass,
+                present: true
+            });
+        }
+    });
+    document.getElementById('pasteArea').value = "";
+    saveLocal();
+    renderStudentList();
+};
+
+window.renderStudentList = function() {
+    const container = document.getElementById('studentList');
+    container.innerHTML = '';
+    const search = document.getElementById('studentSearch').value.toLowerCase();
+    
+    document.getElementById('studentCount').innerText = window.data.students.length;
+    
+    // Sort logic: Class first, then Name
+    window.data.students.sort((a,b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name));
+    
+    window.data.students.forEach(s => {
+        if(s.name.toLowerCase().includes(search) || s.class.toLowerCase().includes(search)) {
+            const div = document.createElement('div');
+            div.className = `student-item ${s.present ? '' : 'absent'}`;
+            div.innerHTML = `
+                <span><b>${s.class}</b> ${s.name}</span>
+                <input type="checkbox" ${s.present ? 'checked' : ''} onchange="toggleStudent('${s.id}')">
+            `;
+            container.appendChild(div);
+        }
+    });
+};
+
+window.toggleStudent = function(id) {
+    const s = window.data.students.find(x => x.id === id);
+    if(s) { s.present = !s.present; saveLocal(); renderStudentList(); }
+};
+
+window.clearStudents = function() {
+    if(confirm("Slette ALLE elever?")) {
+        window.data.students = [];
+        saveLocal();
+        renderStudentList();
+    }
+};
+
+// =============================================================
+// 5. ARENA SETTINGS
+// =============================================================
+window.renderCourts = function() {
+    const d = document.getElementById('courtList');
+    d.innerHTML = '';
+    window.data.courts.forEach((c, i) => {
+        const div = document.createElement('div');
+        div.className = 'court-item';
+        div.innerHTML = `
+            <input value="${c.name}" onchange="updCourt(${i},'name',this.value)" style="width:40%">
+            <input value="${c.type}" onchange="updCourt(${i},'type',this.value)" style="width:40%">
+            <button class="btn-small-red" onclick="delCourt(${i})">X</button>
+        `;
+        d.appendChild(div);
+    });
+};
+
+window.addCourt = function() {
+    window.data.courts.push({ id: Date.now(), name: `Bane ${window.data.courts.length+1}`, type: "Aktivitet" });
+    saveLocal(); renderCourts();
+};
+window.updCourt = function(i, f, v) { window.data.courts[i][f] = v; saveLocal(); };
+window.delCourt = function(i) { window.data.courts.splice(i, 1); saveLocal(); renderCourts(); };
+
+['startTime', 'finalsTime', 'matchDuration', 'breakDuration'].forEach(id => {
+    document.getElementById(id).addEventListener('change', (e) => {
+        window.data.settings[id] = e.target.value;
+        saveLocal();
+    });
+});
+
+// =============================================================
+// 6. TEAM GENERATION (The Logic Core)
+// =============================================================
+window.toggleCustomMix = function() {
+    const s = document.getElementById('drawStrategy').value;
+    document.getElementById('customMixPanel').classList.toggle('hidden', s !== 'custom');
+};
+
+window.renderCustomMixCheckboxes = function() {
+    const d = document.getElementById('customClassCheckboxes');
+    d.innerHTML = '';
+    window.data.classes.forEach(c => {
+        d.innerHTML += `<label style="background:#333;padding:5px;border-radius:4px;display:flex;align-items:center;gap:5px;"><input type="checkbox" value="${c}">${c}</label>`;
+    });
+};
+
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
+
+window.generateTeams = function() {
+    if(window.data.teamsLocked) return alert("Lagene er låst. Lås opp først.");
+    
+    const count = parseInt(document.getElementById('teamCount').value);
+    const strategy = document.getElementById('drawStrategy').value;
+    const presentStudents = window.data.students.filter(s => s.present);
+    
+    // Init empty teams
+    window.data.teams = Array.from({length: count}, (_, i) => ({
+        id: i+1,
+        name: `Lag ${i+1}`,
+        members: [],
+        points: 0,
+        stats: { played:0, w:0, d:0, l:0, gf:0, ga:0 }
+    }));
+
+    // --- ALGORITHMS ---
+    
+    if(strategy === 'balanced') {
+        // "Kortstokk-metoden"
+        let buckets = {};
+        window.data.classes.forEach(c => {
+            buckets[c] = presentStudents.filter(s => s.class === c);
+            shuffle(buckets[c]);
+        });
+        
+        let deck = [];
+        let anyLeft = true;
+        while(anyLeft) {
+            anyLeft = false;
+            window.data.classes.forEach(c => {
+                if(buckets[c] && buckets[c].length > 0) {
+                    deck.push(buckets[c].pop());
+                    anyLeft = true;
+                }
+            });
+        }
+        
+        // Deal
+        deck.forEach((s, i) => {
+            window.data.teams[i % count].members.push(s);
+        });
+    }
+    
+    else if(strategy === 'class_based') {
+        // Rent klasse-inndeling
+        let teamsPerClass = Math.ceil(count / window.data.classes.length);
+        let currentTeamIdx = 0;
+        
+        window.data.classes.forEach(c => {
+            let classStudents = presentStudents.filter(s => s.class === c);
+            shuffle(classStudents);
+            
+            // Distribute this class to the next N teams
+            let startTeam = currentTeamIdx;
+            let endTeam = Math.min(startTeam + teamsPerClass, count);
+            let localIdx = startTeam;
+            
+            while(classStudents.length > 0) {
+                if(localIdx >= endTeam) localIdx = startTeam; // Loop within assigned teams
+                if(localIdx < count) {
+                    window.data.teams[localIdx].members.push(classStudents.pop());
+                } else {
+                    // Fallback
+                    window.data.teams[0].members.push(classStudents.pop());
+                }
+                localIdx++;
+            }
+            currentTeamIdx = endTeam;
+        });
+    }
+    
+    else if(strategy === 'random') {
+        let pool = [...presentStudents];
+        shuffle(pool);
+        pool.forEach((s, i) => {
+            window.data.teams[i % count].members.push(s);
+        });
+    }
+    
+    else {
+        // Split Logic (AB/CD or Custom)
+        let group1Classes = [];
+        if(strategy === 'ab_cd') {
+            const mid = Math.ceil(window.data.classes.length / 2);
+            group1Classes = window.data.classes.slice(0, mid);
+        } else {
+            // Custom
+            document.querySelectorAll('#customClassCheckboxes input:checked').forEach(cb => group1Classes.push(cb.value));
+        }
+        
+        const pool1 = presentStudents.filter(s => group1Classes.includes(s.class));
+        const pool2 = presentStudents.filter(s => !group1Classes.includes(s.class));
+        
+        const teams1 = window.data.teams.slice(0, Math.ceil(count/2));
+        const teams2 = window.data.teams.slice(Math.ceil(count/2));
+        
+        shuffle(pool1); pool1.forEach((s, i) => teams1[i % teams1.length].members.push(s));
+        shuffle(pool2); pool2.forEach((s, i) => teams2[i % teams2.length].members.push(s));
+    }
+    
+    saveLocal();
+    renderTeams();
+};
+
+// Drag & Drop
+window.handleDragStart = function(e, mId, tId) {
+    if(window.data.teamsLocked) { e.preventDefault(); return; }
+    draggedMemberId = mId;
+    draggedFromTeamId = tId;
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.classList.add('dragging');
+};
+window.handleDragOver = function(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
+window.handleDragLeave = function(e) { e.currentTarget.classList.remove('drag-over'); };
+window.handleDrop = function(e, tId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const source = window.data.teams.find(t => t.id === draggedFromTeamId);
+    const target = window.data.teams.find(t => t.id === tId);
+    
+    if(source && target && source !== target) {
+        const idx = source.members.findIndex(m => m.id === draggedMemberId);
+        if(idx > -1) {
+            target.members.push(source.members.splice(idx, 1)[0]);
+            saveLocal();
+            renderTeams();
+        }
+    }
+    document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+};
+
+window.renderTeams = function() {
+    const d = document.getElementById('drawDisplay');
+    d.innerHTML = '';
+    window.data.teams.forEach(t => {
+        const card = document.createElement('div');
+        card.className = 'team-card';
+        card.ondragover = window.handleDragOver;
+        card.ondragleave = window.handleDragLeave;
+        card.ondrop = (e) => window.handleDrop(e, t.id);
+        
+        let membersHtml = t.members.map((m, i) => `
+            <div class="team-member" draggable="true" ondragstart="handleDragStart(event, '${m.id}', ${t.id})">
+                <span>${i+1}. ${m.name}</span>
+                <span class="team-class-badge">${m.class}</span>
+            </div>
+        `).join('');
+        
+        card.innerHTML = `
+            <h3><input value="${t.name}" onchange="renameTeam(${t.id}, this.value)"></h3>
+            <div>${membersHtml}</div>
+        `;
+        d.appendChild(card);
+    });
+    
+    const btn = document.getElementById('lockBtn');
+    btn.className = window.data.teamsLocked ? 'btn-small-red' : 'btn-yellow';
+    btn.innerText = window.data.teamsLocked ? '🔒 Låst (Klikk for å åpne)' : '🔓 Åpen (Klikk for å låse)';
+};
+
+window.renameTeam = function(id, val) {
+    const t = window.data.teams.find(t => t.id == id);
+    if(t) { t.name = val; saveLocal(); updateLeaderboard(); }
+};
+
+window.toggleLockTeams = function() {
+    window.data.teamsLocked = !window.data.teamsLocked;
+    saveLocal();
+    renderTeams();
+};
+
+// =============================================================
+// 7. SCHEDULE GENERATION
+// =============================================================
+window.generateSchedule = function() {
+    if(!window.data.teamsLocked) {
+        if(!confirm("Lagene er ikke låst. Vil du låse dem og generere oppsett?")) return;
+        window.toggleLockTeams();
+    }
+    if(window.data.courts.length === 0) return alert("Ingen baner er definert!");
+    
+    window.data.matches = [];
+    
+    // Time Setup
+    let currentTime = new Date();
+    const [sh, sm] = window.data.settings.startTime.split(':');
+    currentTime.setHours(sh, sm, 0);
+    const slotDuration = parseInt(window.data.settings.matchDuration) + parseInt(window.data.settings.breakDuration);
+    
+    // Round Robin Pairing
+    let tIds = window.data.teams.map(t => t.id);
+    if(tIds.length % 2 !== 0) tIds.push(null); // Bye
+    
+    let rounds = [];
+    for (let r = 0; r < tIds.length - 1; r++) {
+        let roundPairs = [];
+        for (let i = 0; i < tIds.length / 2; i++) {
+            const t1 = tIds[i];
+            const t2 = tIds[tIds.length - 1 - i];
+            if (t1 !== null && t2 !== null) {
+                roundPairs.push({ t1, t2 });
+            }
+        }
+        rounds.push(roundPairs);
+        tIds.splice(1, 0, tIds.pop());
+    }
+    
+    // Flatten rounds and assign to courts/time
+    // Strategy: Play full rounds sequentially? Or fill courts continuously?
+    // Let's do sequential rounds to keep it fair.
+    
+    rounds.forEach((roundPairs, roundIdx) => {
+        // Each round needs ceil(pairs / courts) time slots
+        // But simpler: just queue all matches and fill courts
+    });
+    
+    // Flatten all matches
+    let allMatches = rounds.flat();
+    
+    // Fill slots
+    while(allMatches.length > 0) {
+        let activeMatches = [];
+        window.data.courts.forEach(court => {
+            if(allMatches.length > 0) {
+                // To avoid teams playing twice in same slot:
+                const matchIdx = allMatches.findIndex(m => 
+                    !activeMatches.some(am => am.t1 == m.t1 || am.t2 == m.t1 || am.t1 == m.t2 || am.t2 == m.t2)
+                );
+                
+                if(matchIdx > -1) {
+                    const match = allMatches.splice(matchIdx, 1)[0];
+                    activeMatches.push({ ...match, court: court.name, type: court.type });
+                }
+            }
+        });
+        
+        if(activeMatches.length === 0) break; // Should not happen
+        
+        const timeStr = currentTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        
+        activeMatches.forEach(am => {
+            window.data.matches.push({
+                id: genId(),
+                time: timeStr,
+                t1: am.t1,
+                t2: am.t2,
+                court: am.court,
+                type: am.type,
+                s1: null, s2: null, done: false
+            });
+        });
+        
+        currentTime.setMinutes(currentTime.getMinutes() + slotDuration);
+    }
+    
+    saveLocal();
+    renderSchedule();
+    renderResults();
+    showTab('schedule');
+};
+
+window.renderSchedule = function() {
+    const c = document.getElementById('scheduleContainer');
+    c.innerHTML = '';
+    
+    // Group by Time
+    let groups = {};
+    window.data.matches.sort((a,b) => a.time.localeCompare(b.time));
+    window.data.matches.forEach(m => {
+        if(!groups[m.time]) groups[m.time] = [];
+        groups[m.time].push(m);
+    });
+    
+    for(let time in groups) {
+        const block = document.createElement('div');
+        block.className = 'match-round-block';
+        block.innerHTML = `<div class="match-round-header">Kl ${time}</div>`;
+        
+        groups[time].forEach(m => {
+            const t1 = window.data.teams.find(t => t.id == m.t1);
+            const t2 = window.data.teams.find(t => t.id == m.t2);
+            if(!t1 || !t2) return;
+            
+            const row = document.createElement('div');
+            row.className = 'match-item';
+            row.innerHTML = `
+                <div class="match-court">${m.court}</div>
+                <div class="match-teams">${t1.name} vs ${t2.name} <small>(${m.type})</small></div>
+                <div class="match-result-box"></div> <!-- For print -->
+            `;
+            block.appendChild(row);
+        });
+        c.appendChild(block);
+    }
+};
+
+window.clearSchedule = function() {
+    if(confirm("Slett kampoppsettet?")) {
+        window.data.matches = [];
+        window.data.finals = [];
+        saveLocal();
+        renderSchedule();
+        renderResults();
+    }
+};
+
+// =============================================================
+// 8. RESULTS ENTRY
+// =============================================================
+window.renderResults = function() {
+    const c = document.getElementById('resultsContainer');
+    c.innerHTML = '';
+    
+    // Sort by time
+    window.data.matches.sort((a,b) => a.time.localeCompare(b.time));
+    
+    window.data.matches.forEach(m => {
+        const t1 = window.data.teams.find(t => t.id == m.t1);
+        const t2 = window.data.teams.find(t => t.id == m.t2);
+        
+        const div = document.createElement('div');
+        div.className = 'res-card';
+        div.innerHTML = `
+            <div class="res-info">
+                <span>${m.time} | ${m.court}</span><br>
+                <span>${t1.name} vs ${t2.name}</span>
+            </div>
+            <div class="res-inputs">
+                <input type="number" value="${m.s1 ?? ''}" onchange="updScore('${m.id}', 's1', this.value)" placeholder="0">
+                -
+                <input type="number" value="${m.s2 ?? ''}" onchange="updScore('${m.id}', 's2', this.value)" placeholder="0">
+            </div>
+        `;
+        c.appendChild(div);
+    });
+};
+
+window.updScore = function(id, field, val) {
+    const m = window.data.matches.find(x => x.id === id);
+    if(m) {
+        m[field] = val === '' ? null : parseInt(val);
+        m.done = (m.s1 !== null && m.s2 !== null);
+        saveLocal();
+        updateLeaderboard();
+    }
+};
+
+// =============================================================
+// 9. LEADERBOARD & FINALS
+// =============================================================
+window.updateLeaderboard = function() {
+    // Reset
+    window.data.teams.forEach(t => { 
+        t.points = 0; 
+        t.stats = { played:0, w:0, d:0, l:0, gf:0, ga:0 };
+    });
+    
+    // Calc Matches
+    window.data.matches.forEach(m => {
+        if(m.done) {
+            const t1 = window.data.teams.find(t => t.id == m.t1);
+            const t2 = window.data.teams.find(t => t.id == m.t2);
+            if(t1 && t2) {
+                t1.stats.played++; t2.stats.played++;
+                t1.stats.gf += m.s1; t1.stats.ga += m.s2;
+                t2.stats.gf += m.s2; t2.stats.ga += m.s1;
+                
+                if(m.s1 > m.s2) { t1.points += 3; t1.stats.w++; t2.stats.l++; }
+                else if(m.s2 > m.s1) { t2.points += 3; t2.stats.w++; t1.stats.l++; }
+                else { t1.points += 1; t2.points += 1; t1.stats.d++; t2.stats.d++; }
+            }
+        }
+    });
+    
+    // Calc Finals
+    if(window.data.finals) {
+        window.data.finals.forEach(f => {
+            if(f.done) {
+                // Finals usually don't count to leaderboard, but could display winner
+            }
+        });
+    }
+    
+    // Sort: Points > Diff > Goals For
+    window.data.teams.sort((a,b) => {
+        if(b.points !== a.points) return b.points - a.points;
+        const diffA = a.stats.gf - a.stats.ga;
+        const diffB = b.stats.gf - b.stats.ga;
+        if(diffA !== diffB) return diffB - diffA;
+        return b.stats.gf - a.stats.gf;
+    });
+    
+    // Render Table
+    const tbody = document.getElementById('leaderboardBody');
+    tbody.innerHTML = '';
+    window.data.teams.forEach((t, i) => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${i+1}</td>
+                <td>${t.name}</td>
+                <td>${t.stats.played}</td>
+                <td>${t.stats.w}</td>
+                <td>${t.stats.d}</td>
+                <td>${t.stats.l}</td>
+                <td>${t.stats.gf - t.stats.ga}</td>
+                <td><strong>${t.points}</strong></td>
+            </tr>
+        `;
+    });
+    
+    updateFinalSelectors();
+};
+
+function updateFinalSelectors() {
+    const s1 = document.getElementById('finalTeam1');
+    const s2 = document.getElementById('finalTeam2');
+    
+    // Preserve selection if possible
+    const v1 = s1.value; 
+    const v2 = s2.value;
+    
+    const ops = window.data.teams.map((t, i) => `<option value="${t.id}">${i+1}. ${t.name} (${t.points}p)</option>`).join('');
+    
+    s1.innerHTML = ops;
+    s2.innerHTML = ops;
+    
+    if(v1) s1.value = v1; 
+    else if(window.data.teams.length > 0) s1.selectedIndex = 0;
+    
+    if(v2) s2.value = v2; 
+    else if(window.data.teams.length > 1) s2.selectedIndex = 1;
+}
+
+window.createFinalMatch = function() {
+    const t1Id = document.getElementById('finalTeam1').value;
+    const t2Id = document.getElementById('finalTeam2').value;
+    const name = document.getElementById('finalName').value;
+    
+    const t1 = window.data.teams.find(t => t.id == t1Id);
+    const t2 = window.data.teams.find(t => t.id == t2Id);
+    
+    if(!window.data.finals) window.data.finals = [];
+    
+    window.data.finals.push({
+        id: genId(),
+        name: name,
+        t1: t1.name, t2: t2.name,
+        s1: null, s2: null, done: false
+    });
+    saveLocal();
+    renderFinalsList();
+};
+
+function renderFinalsList() {
+    const d = document.getElementById('finalsList');
+    d.innerHTML = '';
+    if(!window.data.finals) return;
+    
+    window.data.finals.forEach((f, i) => {
+        const div = document.createElement('div');
+        div.className = 'final-match-item';
+        div.innerHTML = `
+            <div>
+                <strong>${f.name}</strong><br>
+                ${f.t1} vs ${f.t2}
+            </div>
+            <div style="display:flex; gap:5px;">
+                <input type="number" value="${f.s1??''}" onchange="updFinal(${i}, 's1', this.value)" style="width:50px">
+                -
+                <input type="number" value="${f.s2??''}" onchange="updFinal(${i}, 's2', this.value)" style="width:50px">
+            </div>
+            <button class="btn-text-red" onclick="declareWinner(${i})">🏆</button>
+            <button class="btn-text-red" onclick="delFinal(${i})">X</button>
+        `;
+        d.appendChild(div);
+    });
+}
+
+window.updFinal = function(idx, field, val) {
+    const f = window.data.finals[idx];
+    f[field] = val === '' ? null : parseInt(val);
+    f.done = (f.s1 !== null && f.s2 !== null);
+    saveLocal();
+};
+
+window.delFinal = function(idx) {
+    if(confirm("Slett finale?")) {
+        window.data.finals.splice(idx, 1);
+        saveLocal();
+        renderFinalsList();
+    }
+};
+
+window.declareWinner = function(idx) {
+    const f = window.data.finals[idx];
+    let w = "UAVGJORT";
+    if(f.s1 > f.s2) w = f.t1;
+    if(f.s2 > f.s1) w = f.t2;
+    
+    document.getElementById('winnerText').innerText = w;
+    document.getElementById('winnerOverlay').classList.remove('hidden');
+};
+
+window.closeWinner = function() {
+    document.getElementById('winnerOverlay').classList.add('hidden');
+};
+
+// =============================================================
+// 10. KAMPSTYRING (MANUAL TIMER)
+// =============================================================
+window.timerStart = function() {
+    if(isTimerRunning) return;
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    window.playHornShort();
+    isTimerRunning = true;
+    timerInterval = setInterval(() => {
+        timerSeconds--;
+        updateTimerDisplay();
+        if(timerSeconds <= 0) {
+            window.timerPause();
+            window.playHornLong();
+        }
+    }, 1000);
+};
+
+window.timerPause = function() {
+    clearInterval(timerInterval);
+    isTimerRunning = false;
+};
+
+window.timerReset = function() {
+    window.timerPause();
+    timerSeconds = parseInt(window.data.settings.matchDuration) * 60;
+    updateTimerDisplay();
+};
+
+window.adjustTimer = function(min) {
+    timerSeconds += (min * 60);
+    if(timerSeconds < 0) timerSeconds = 0;
+    updateTimerDisplay();
+};
+
+function updateTimerDisplay() {
+    const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
+    const s = (timerSeconds % 60).toString().padStart(2, '0');
+    const el = document.getElementById('mainTimer');
+    if(el) el.innerText = `${m}:${s}`;
+}
+
+window.playHornShort = function() {
+    playSound(600, 0.3, 'sine');
+};
+
+window.playHornLong = function() {
+    // Air raid siren effect
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 150;
+    osc.connect(g);
+    g.connect(audioCtx.destination);
+    
+    const now = audioCtx.currentTime;
+    g.gain.setValueAtTime(1, now);
+    g.gain.linearRampToValueAtTime(0, now + 3);
+    
+    osc.start();
+    osc.stop(now + 3);
+};
+
+function playSound(freq, dur, type) {
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    osc.connect(g);
+    g.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur);
+}
+
+// =============================================================
+// 11. FILE IO
+// =============================================================
 window.saveToFile = function() {
-    const blob = new Blob([JSON.stringify(window.data, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(window.data, null, 2)], {type: "application/json"});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `turnering_v16_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `turnering_v17_${new Date().toISOString().slice(0,10)}.json`;
     a.click();
 };
 
 window.loadFromFile = function() {
     const file = document.getElementById('fileInput').files[0];
-    if (!file) return;
+    if(!file) return;
     const reader = new FileReader();
     reader.onload = e => {
         try {
             window.data = JSON.parse(e.target.result);
             saveLocal();
             location.reload();
-        } catch (err) { alert("Feil filformat"); }
+        } catch(err) { alert("Filfeil."); }
     };
     reader.readAsText(file);
 };
 
-window.confirmReset = function() {
-    if (confirm("Slett ALT? Dette kan ikke angres.")) {
-        localStorage.removeItem('ts_v16_data');
-        location.reload();
-    }
-};
-
-window.showTab = function(id) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-
-    const map = { 'setup': 0, 'arena': 1, 'draw': 2, 'matches': 3, 'finals': 4 };
-    if (map[id] !== undefined) {
-        document.querySelectorAll('.tabs button')[map[id]].classList.add('active');
-    }
-};
-
-/* Version: #16 */
+/* Version: #17 */
