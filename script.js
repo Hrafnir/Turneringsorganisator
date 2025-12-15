@@ -1,7 +1,7 @@
-/* Version: #18 */
+/* Version: #19 */
 
 // =============================================================
-// 1. GLOBAL STATE
+// 1. GLOBAL STATE & DATA
 // =============================================================
 window.data = {
     title: "Skoleturnering",
@@ -24,15 +24,11 @@ window.data = {
     teamsLocked: false
 };
 
-// Timer State
+// System Vars
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let timerInterval = null;
 let timerSeconds = 15 * 60;
 let isTimerRunning = false;
-
-// Audio Context
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-// Drag & Drop State
 let draggedMemberId = null;
 let draggedFromTeamId = null;
 
@@ -41,38 +37,57 @@ let draggedFromTeamId = null;
 // =============================================================
 document.addEventListener("DOMContentLoaded", () => {
     loadLocal();
+    
+    // FAILSAFE: Ensure classes exist
+    if (!window.data.classes || window.data.classes.length === 0) {
+        window.data.classes = ["10A", "10B", "10C", "10D"];
+    }
+
     renderClassButtons();
     renderStudentList();
     renderCourts();
     
+    // Restore Views
     if(window.data.teams.length > 0) renderTeams();
-    if(window.data.matches.length > 0) renderSchedule();
+    if(window.data.matches.length > 0) {
+        renderSchedule();
+        renderResults(); // Ensure merged view works
+    }
     updateLeaderboard();
     
-    // Init timer display
+    // Timer Init
     updateTimerDisplay();
+    
+    // Ensure correct tab visibility
+    showTab('setup');
 });
 
 // =============================================================
 // 3. PERSISTENCE & CORE UTILS
 // =============================================================
 window.saveLocal = function() {
-    localStorage.setItem('ts_v18_data', JSON.stringify(window.data));
+    localStorage.setItem('ts_v19_data', JSON.stringify(window.data));
 };
 
 function loadLocal() {
-    const json = localStorage.getItem('ts_v18_data');
+    const json = localStorage.getItem('ts_v19_data');
     if(json) {
         try {
             const parsed = JSON.parse(json);
             window.data = { ...window.data, ...parsed };
         } catch(e) { console.error("Data load fail", e); }
     }
-    // Update inputs
-    document.getElementById('displayTitle').innerText = window.data.title;
-    document.getElementById('tournamentTitleInput').value = window.data.title;
-    document.getElementById('printTitle').innerText = window.data.title;
-    if(document.getElementById('printTitleTeams')) document.getElementById('printTitleTeams').innerText = window.data.title;
+    
+    // Update inputs from loaded data
+    const dispTitle = document.getElementById('displayTitle');
+    const inpTitle = document.getElementById('tournamentTitleInput');
+    const prtTitle = document.getElementById('printTitle');
+    const prtTitleTeams = document.getElementById('printTitleTeams');
+    
+    if(dispTitle) dispTitle.innerText = window.data.title;
+    if(inpTitle) inpTitle.value = window.data.title;
+    if(prtTitle) prtTitle.innerText = window.data.title;
+    if(prtTitleTeams) prtTitleTeams.innerText = window.data.title;
     
     ['startTime','finalsTime','matchDuration','breakDuration'].forEach(k => {
         const el = document.getElementById(k);
@@ -83,7 +98,7 @@ function loadLocal() {
 window.updateTitle = function(val) {
     window.data.title = val;
     document.getElementById('displayTitle').innerText = val;
-    document.getElementById('printTitle').innerText = val;
+    if(document.getElementById('printTitle')) document.getElementById('printTitle').innerText = val;
     if(document.getElementById('printTitleTeams')) document.getElementById('printTitleTeams').innerText = val;
     saveLocal();
 };
@@ -93,8 +108,8 @@ window.genId = function() {
 };
 
 window.confirmReset = function() {
-    if(confirm("Er du sikker på at du vil slette ALT?")) {
-        localStorage.removeItem('ts_v18_data');
+    if(confirm("Er du sikker på at du vil slette ALT? Dette kan ikke angres.")) {
+        localStorage.removeItem('ts_v19_data');
         location.reload();
     }
 };
@@ -105,18 +120,20 @@ window.showTab = function(id) {
     document.getElementById(id).classList.add('active');
     
     const btns = document.querySelectorAll('.tabs-bar button');
-    const map = {'setup':0,'arena':1,'draw':2,'schedule':3,'control':4,'finals':5};
-    if(map[id] !== undefined) btns[map[id]].classList.add('active');
+    const map = {'setup':0,'arena':1,'draw':2,'schedule':3,'control':4,'finals':5}; // Removed results tab (merged)
+    if(map[id] !== undefined && btns[map[id]]) btns[map[id]].classList.add('active');
 };
 
 // =============================================================
-// 4. SETUP
+// 4. SETUP: STUDENTS & CLASSES
 // =============================================================
 let selectedClass = "";
 
 window.renderClassButtons = function() {
     const d = document.getElementById('classButtons');
+    if(!d) return;
     d.innerHTML = '';
+    
     window.data.classes.forEach(c => {
         const btn = document.createElement('span');
         btn.className = `class-btn ${selectedClass === c ? 'selected' : ''}`;
@@ -124,9 +141,12 @@ window.renderClassButtons = function() {
         btn.onclick = () => { selectedClass = c; renderClassButtons(); };
         d.appendChild(btn);
     });
+    
+    // Auto-select first class if none selected
     if(!selectedClass && window.data.classes.length > 0) {
         selectedClass = window.data.classes[0];
-        renderClassButtons();
+        // Re-render to show selection visually
+        if(d.children.length > 0) d.children[0].classList.add('selected');
     }
     renderCustomMixCheckboxes();
 };
@@ -139,6 +159,7 @@ window.addClass = function() {
         saveLocal();
         renderClassButtons();
     }
+    document.getElementById('newClassInput').value = "";
 };
 
 window.delClass = function(c, e) {
@@ -173,6 +194,7 @@ window.addStudents = function() {
 
 window.renderStudentList = function() {
     const container = document.getElementById('studentList');
+    if(!container) return;
     container.innerHTML = '';
     const search = document.getElementById('studentSearch').value.toLowerCase();
     
@@ -211,6 +233,7 @@ window.clearStudents = function() {
 // =============================================================
 window.renderCourts = function() {
     const d = document.getElementById('courtList');
+    if(!d) return;
     d.innerHTML = '';
     window.data.courts.forEach((c, i) => {
         const div = document.createElement('div');
@@ -232,25 +255,28 @@ window.updCourt = function(i, f, v) { window.data.courts[i][f] = v; saveLocal();
 window.delCourt = function(i) { window.data.courts.splice(i, 1); saveLocal(); renderCourts(); };
 
 ['startTime', 'finalsTime', 'matchDuration', 'breakDuration'].forEach(id => {
-    document.getElementById(id).addEventListener('change', (e) => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change', (e) => {
         window.data.settings[id] = e.target.value;
         saveLocal();
     });
 });
 
 // =============================================================
-// 6. TEAM GENERATION
+// 6. TEAM GENERATION (SMART BALANCE FIX)
 // =============================================================
 window.toggleCustomMix = function() {
     const s = document.getElementById('drawStrategy').value;
-    document.getElementById('customMixPanel').classList.toggle('hidden', s !== 'custom');
+    const panel = document.getElementById('customMixPanel');
+    if(panel) panel.classList.toggle('hidden', s !== 'custom');
 };
 
 window.renderCustomMixCheckboxes = function() {
     const d = document.getElementById('customClassCheckboxes');
+    if(!d) return;
     d.innerHTML = '';
     window.data.classes.forEach(c => {
-        d.innerHTML += `<label style="background:#333;padding:5px;border-radius:4px;display:flex;align-items:center;gap:5px;"><input type="checkbox" value="${c}">${c}</label>`;
+        d.innerHTML += `<label style="background:#333;padding:5px;border-radius:4px;display:flex;align-items:center;gap:5px;color:white;"><input type="checkbox" value="${c}">${c}</label>`;
     });
 };
 
@@ -268,6 +294,7 @@ window.generateTeams = function() {
     const strategy = document.getElementById('drawStrategy').value;
     const presentStudents = window.data.students.filter(s => s.present);
     
+    // Init empty teams
     window.data.teams = Array.from({length: count}, (_, i) => ({
         id: i+1,
         name: `Lag ${i+1}`,
@@ -277,30 +304,41 @@ window.generateTeams = function() {
     }));
 
     if(strategy === 'balanced') {
-        // PERFEKT MIKS: Sort by class, distribute round robin
+        // SMART BALANCE ALGORITHM ("Fill the holes")
+        // 1. Sort students by class to keep buckets
+        // 2. Shuffle inside buckets
         let buckets = {};
         window.data.classes.forEach(c => {
             buckets[c] = presentStudents.filter(s => s.class === c);
             shuffle(buckets[c]);
         });
+
+        // 3. Flatten list (Class A, Class B, Class C, Class D...)
+        // Actually, better: Iterate classes and distribute one by one to teams
+        // that need that class most.
         
-        let deck = [];
-        let anyLeft = true;
-        // Interleave classes: A, B, C, D, A, B, C, D...
-        while(anyLeft) {
-            anyLeft = false;
-            window.data.classes.forEach(c => {
-                if(buckets[c] && buckets[c].length > 0) {
-                    deck.push(buckets[c].pop());
-                    anyLeft = true;
-                }
-            });
+        // Loop through each class
+        for (const cls of window.data.classes) {
+            const studentsInClass = buckets[cls];
+            
+            // Distribute these students to teams
+            while (studentsInClass.length > 0) {
+                const student = studentsInClass.pop();
+                
+                // Find team with fewest members TOTAL
+                // If tie, random pick among tied teams (or sequential)
+                
+                let minSize = 9999;
+                window.data.teams.forEach(t => { if(t.members.length < minSize) minSize = t.members.length; });
+                
+                // Candidates are teams with minSize members
+                let candidates = window.data.teams.filter(t => t.members.length === minSize);
+                
+                // Pick one (randomly to avoid pattern)
+                const luckyTeam = candidates[Math.floor(Math.random() * candidates.length)];
+                luckyTeam.members.push(student);
+            }
         }
-        
-        // Deal deck to teams
-        deck.forEach((s, i) => {
-            window.data.teams[i % count].members.push(s);
-        });
     }
     
     else if(strategy === 'class_based') {
@@ -310,6 +348,7 @@ window.generateTeams = function() {
         window.data.classes.forEach(c => {
             let classStudents = presentStudents.filter(s => s.class === c);
             shuffle(classStudents);
+            
             let startTeam = currentTeamIdx;
             let endTeam = Math.min(startTeam + teamsPerClass, count);
             let localIdx = startTeam;
@@ -334,7 +373,7 @@ window.generateTeams = function() {
         });
     }
     else {
-        // Split (AB vs CD or Custom)
+        // Split (AB/CD)
         let group1Classes = [];
         if(strategy === 'ab_cd') {
             const mid = Math.ceil(window.data.classes.length / 2);
@@ -342,10 +381,13 @@ window.generateTeams = function() {
         } else {
             document.querySelectorAll('#customClassCheckboxes input:checked').forEach(cb => group1Classes.push(cb.value));
         }
+        
         const pool1 = presentStudents.filter(s => group1Classes.includes(s.class));
         const pool2 = presentStudents.filter(s => !group1Classes.includes(s.class));
+        
         const teams1 = window.data.teams.slice(0, Math.ceil(count/2));
         const teams2 = window.data.teams.slice(Math.ceil(count/2));
+        
         shuffle(pool1); pool1.forEach((s, i) => teams1[i % teams1.length].members.push(s));
         shuffle(pool2); pool2.forEach((s, i) => teams2[i % teams2.length].members.push(s));
     }
@@ -381,6 +423,7 @@ window.handleDrop = function(e, tId) {
 
 window.renderTeams = function() {
     const d = document.getElementById('drawDisplay');
+    if(!d) return;
     d.innerHTML = '';
     window.data.teams.forEach(t => {
         const card = document.createElement('div');
@@ -399,9 +442,12 @@ window.renderTeams = function() {
         card.innerHTML = `<h3><input value="${t.name}" onchange="renameTeam(${t.id}, this.value)"></h3><div>${membersHtml}</div>`;
         d.appendChild(card);
     });
+    
     const btn = document.getElementById('lockBtn');
-    btn.className = window.data.teamsLocked ? 'btn-small-red' : 'btn-yellow';
-    btn.innerText = window.data.teamsLocked ? '🔒 Låst' : '🔓 Åpen';
+    if(btn) {
+        btn.className = window.data.teamsLocked ? 'btn-small-red' : 'btn-yellow';
+        btn.innerText = window.data.teamsLocked ? '🔒 Låst (Klikk for å åpne)' : '🔓 Åpen (Klikk for å låse)';
+    }
 };
 
 window.renameTeam = function(id, val) {
@@ -416,11 +462,11 @@ window.toggleLockTeams = function() {
 };
 
 // =============================================================
-// 7. SCHEDULE
+// 7. SCHEDULE & RESULT MERGED
 // =============================================================
 window.generateSchedule = function() {
     if(!window.data.teamsLocked) {
-        if(!confirm("Lagene er ikke låst. Låse dem?")) return;
+        if(!confirm("Lagene er ikke låst. Vil du låse dem og generere oppsett?")) return;
         window.toggleLockTeams();
     }
     if(window.data.courts.length === 0) return alert("Ingen baner!");
@@ -475,10 +521,15 @@ window.generateSchedule = function() {
 
 window.renderSchedule = function() {
     const c = document.getElementById('scheduleContainer');
+    if(!c) return;
     c.innerHTML = '';
+    
     let groups = {};
     window.data.matches.sort((a,b) => a.time.localeCompare(b.time));
-    window.data.matches.forEach(m => { if(!groups[m.time]) groups[m.time] = []; groups[m.time].push(m); });
+    window.data.matches.forEach(m => {
+        if(!groups[m.time]) groups[m.time] = [];
+        groups[m.time].push(m);
+    });
     
     for(let time in groups) {
         const block = document.createElement('div');
@@ -503,6 +554,11 @@ window.renderSchedule = function() {
         });
         c.appendChild(block);
     }
+};
+
+window.renderResults = function() {
+    // This is merged into renderSchedule now, but kept if called.
+    renderSchedule();
 };
 
 window.updScore = function(id, field, val) {
@@ -531,7 +587,7 @@ window.clearSchedule = function() {
 };
 
 // =============================================================
-// 8. CONTROL (TIMER)
+// 8. CONTROL (MANUAL TIMER)
 // =============================================================
 window.timerStart = function() {
     if(isTimerRunning) return;
@@ -550,7 +606,8 @@ window.adjustTimer = function(min) { timerSeconds += (min * 60); if(timerSeconds
 function updateTimerDisplay() {
     const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
     const s = (timerSeconds % 60).toString().padStart(2, '0');
-    document.getElementById('mainTimer').innerText = `${m}:${s}`;
+    const el = document.getElementById('mainTimer');
+    if(el) el.innerText = `${m}:${s}`;
 }
 window.playHornShort = function() { playSound(600, 0.3, 'sine'); };
 window.playHornLong = function() {
@@ -568,7 +625,7 @@ function playSound(freq, dur, type) {
 }
 
 // =============================================================
-// 9. LEADERBOARD
+// 9. LEADERBOARD & FINALS
 // =============================================================
 window.updateLeaderboard = function() {
     window.data.teams.forEach(t => { t.points = 0; t.stats = { played:0, w:0, d:0, l:0, gf:0, ga:0 }; });
@@ -589,10 +646,12 @@ window.updateLeaderboard = function() {
     window.data.teams.sort((a,b) => b.points - a.points || (b.stats.gf - b.stats.ga) - (a.stats.gf - a.stats.ga));
     
     const tbody = document.getElementById('leaderboardBody');
-    tbody.innerHTML = '';
-    window.data.teams.forEach((t, i) => {
-        tbody.innerHTML += `<tr><td>${i+1}</td><td>${t.name}</td><td>${t.stats.played}</td><td>${t.stats.w}</td><td>${t.stats.d}</td><td>${t.stats.l}</td><td>${t.stats.gf - t.stats.ga}</td><td><strong>${t.points}</strong></td></tr>`;
-    });
+    if(tbody) {
+        tbody.innerHTML = '';
+        window.data.teams.forEach((t, i) => {
+            tbody.innerHTML += `<tr><td>${i+1}</td><td>${t.name}</td><td>${t.stats.played}</td><td>${t.stats.w}</td><td>${t.stats.d}</td><td>${t.stats.l}</td><td>${t.stats.gf - t.stats.ga}</td><td><strong>${t.points}</strong></td></tr>`;
+        });
+    }
     
     const s1 = document.getElementById('finalTeam1');
     const s2 = document.getElementById('finalTeam2');
@@ -618,6 +677,7 @@ window.createFinalMatch = function() {
 
 function renderFinalsList() {
     const d = document.getElementById('finalsList');
+    if(!d) return;
     d.innerHTML = '';
     if(!window.data.finals) return;
     window.data.finals.forEach((f, i) => {
@@ -649,7 +709,9 @@ window.declareWinner = function(idx) {
 window.closeWinner = function() { document.getElementById('winnerOverlay').classList.add('hidden'); };
 
 function confettiEffect() {
-    const c = document.querySelector('.confetti'); c.innerHTML='';
+    const c = document.querySelector('.confetti'); 
+    if(!c) return;
+    c.innerHTML='';
     for(let i=0; i<50; i++) {
         const p = document.createElement('div');
         p.style.left = Math.random()*100 + '%';
@@ -666,7 +728,7 @@ window.saveToFile = function() {
     const blob = new Blob([JSON.stringify(window.data, null, 2)], {type: "application/json"});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `turnering_v17.json`;
+    a.download = `turnering_v19.json`;
     a.click();
 };
 window.loadFromFile = function() {
@@ -679,4 +741,4 @@ window.loadFromFile = function() {
     reader.readAsText(file);
 };
 
-/* Version: #17 */
+/* Version: #19 */
