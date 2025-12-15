@@ -1,10 +1,10 @@
-<!-- Version: #18 -->
+<!-- Version: #20 -->
 <!DOCTYPE html>
 <html lang="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Turneringssjefen v18.0</title>
+    <title>Turneringssjefen v20.0</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -28,7 +28,7 @@
         <!-- NAVIGATION (Skjules på print) -->
         <nav class="no-print">
             <div class="logo-area">
-                <div class="logo">🏆 <span id="displayTitle">Turnering</span> <span class="version">v18.0</span></div>
+                <div class="logo">🏆 <span id="displayTitle">Turnering</span> <span class="version">v20.0</span></div>
                 <input type="text" id="tournamentTitleInput" placeholder="Navn på turnering..." onchange="updateTitle(this.value)" class="title-input">
             </div>
             
@@ -50,7 +50,7 @@
             <button onclick="showTab('arena')">2. Arena</button>
             <button onclick="showTab('draw')">3. Lag</button>
             <button onclick="showTab('schedule')">4. Kamper & Resultater</button>
-            <button onclick="showTab('control')" class="tab-highlight">5. KAMPSTYRING (Klokke)</button>
+            <button onclick="showTab('control')" class="tab-highlight">5. KAMPSTYRING</button>
             <button onclick="showTab('finals')">6. Tabell & Finale</button>
         </div>
 
@@ -96,11 +96,17 @@
                         <button onclick="addCourt()" class="btn-green-outline">+ Legg til bane</button>
                     </div>
                     <div class="config-box">
-                        <h3>⚙️ Generelt</h3>
+                        <h3>⚙️ Tidsplan & Runder</h3>
                         <div class="form-row"><label>Starttid:</label><input type="time" id="startTime" value="10:15"></div>
                         <div class="form-row"><label>Finalestart:</label><input type="time" id="finalsTime" value="14:00"></div>
                         <div class="form-row"><label>Kamp (min):</label><input type="number" id="matchDuration" value="15"></div>
                         <div class="form-row"><label>Pause (min):</label><input type="number" id="breakDuration" value="5"></div>
+                        <hr style="border:0; border-top:1px solid #444; margin:15px 0;">
+                        <div class="form-row">
+                            <label style="color:var(--accent); font-weight:bold;">Antall runder:</label>
+                            <input type="number" id="roundsCount" value="10" style="border-color:var(--accent);">
+                        </div>
+                        <p class="small-info">Systemet fordeler kamper jevnt basert på antall runder.</p>
                     </div>
                 </div>
                 <div class="footer-actions">
@@ -112,7 +118,6 @@
         <!-- TAB 3: LAGINNDELING -->
         <div id="draw" class="tab-content">
             <div class="container">
-                <!-- PRINT HEADER -->
                 <div class="print-header">
                     <h1 id="printTitleTeams">Lister</h1>
                 </div>
@@ -123,9 +128,9 @@
                         <div class="draw-option">
                             <label>Fordeling:</label>
                             <select id="drawStrategy" onchange="toggleCustomMix()">
-                                <option value="balanced">⚖️ Perfekt Miks (Jevn)</option>
+                                <option value="balanced">⚖️ Perfekt Miks</option>
                                 <option value="class_based">🏫 Klassevis</option>
-                                <option value="ab_cd">🅰️🅱️ Base-miks (A+B / C+D)</option>
+                                <option value="ab_cd">🅰️🅱️ Base-miks</option>
                                 <option value="custom">🛠️ Egendefinert</option>
                                 <option value="random">🎲 Kaos</option>
                             </select>
@@ -159,13 +164,12 @@
         <!-- TAB 4: KAMPPLAN & RESULTATER -->
         <div id="schedule" class="tab-content">
             <div class="container">
-                <!-- PRINT HEADER -->
                 <div class="print-header">
                     <h1>Kampoppsett</h1>
                 </div>
 
                 <div class="schedule-actions no-print">
-                    <button onclick="window.print()" class="btn-grey"><i class="fas fa-print"></i> Skriv ut Kampplan</button>
+                    <button onclick="window.print()" class="btn-grey"><i class="fas fa-print"></i> Skriv ut Oppsett/Dommerkort</button>
                     <button onclick="addManualMatch()" class="btn-text">+ Ekstra kamp</button>
                     <button onclick="clearSchedule()" class="btn-text-red">Slett oppsett</button>
                 </div>
@@ -225,4 +229,4 @@
     <script src="script.js"></script>
 </body>
 </html>
-<!-- Version: #18 -->
+<!-- Version: #20 -->
