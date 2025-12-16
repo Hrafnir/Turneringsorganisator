@@ -33,7 +33,7 @@ let isTimerRunning = false;
 // Audio
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-// Drag Drop
+// Drag Drop State
 let draggedMemberId = null;
 let draggedFromTeamId = null;
 
@@ -192,7 +192,7 @@ window.toggleStudent = function(id) {
 };
 
 window.clearStudents = function() {
-    if(confirm("Slette ALLE elever?")) { window.data.students = []; saveLocal(); renderStudentList(); }
+    if(confirm("Slett ALLE elever?")) { window.data.students = []; saveLocal(); renderStudentList(); }
 };
 
 // =============================================================
@@ -218,7 +218,7 @@ window.delCourt = function(i) { window.data.courts.splice(i, 1); saveLocal(); re
 });
 
 // =============================================================
-// 6. TEAMS (Generering)
+// 6. TEAMS (PERFECT MIX REPAIR)
 // =============================================================
 window.toggleCustomMix = function() {
     const s = document.getElementById('drawStrategy').value;
@@ -238,7 +238,6 @@ function shuffle(arr) {
         const j = Math.floor(Math.random() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    return arr;
 }
 
 window.generateTeams = function() {
@@ -254,13 +253,15 @@ window.generateTeams = function() {
     }));
 
     if(strategy === 'balanced') {
-        // KORTSTOKK-METODEN (Perfekt Miks)
+        // KORTSTOKK-METODEN (Ekte Perfekt Miks)
         let buckets = {};
+        // 1. Legg alle elever i hver sin klassebøtte
         window.data.classes.forEach(c => {
             buckets[c] = presentStudents.filter(s => s.class === c);
             shuffle(buckets[c]);
         });
         
+        // 2. Lag en kortstokk ved å ta en fra hver bøtte etter tur
         let deck = [];
         let anyLeft = true;
         while(anyLeft) {
@@ -272,6 +273,8 @@ window.generateTeams = function() {
                 }
             });
         }
+        
+        // 3. Del ut kortstokken til lagene (som en dealer)
         deck.forEach((s, i) => {
             window.data.teams[i % count].members.push(s);
         });
@@ -319,7 +322,6 @@ window.generateTeams = function() {
     saveLocal(); renderTeams();
 };
 
-// Drag & Drop
 window.handleDragStart = function(e, mId, tId) {
     if(window.data.teamsLocked) { e.preventDefault(); return; }
     draggedMemberId = mId; draggedFromTeamId = tId;
@@ -384,7 +386,7 @@ window.generateSchedule = function() {
     const matchDur = parseInt(window.data.settings.matchDuration);
     const breakDur = parseInt(window.data.settings.breakDuration);
     
-    // 1. Generate ALL possible matchups (Pool)
+    // 1. Generate pairing pool
     let matchPool = [];
     let tIds = window.data.teams.map(t => t.id);
     for(let i=0; i<tIds.length; i++) {
@@ -392,11 +394,8 @@ window.generateSchedule = function() {
             matchPool.push({ t1: tIds[i], t2: tIds[j] });
         }
     }
+    shuffle(matchPool); // Random start
     
-    // Helper: Shuffle pool to prevent same matchups always appearing first
-    shuffle(matchPool);
-    
-    // Track play counts to ensure fairness
     let playCounts = {};
     window.data.teams.forEach(t => playCounts[t.id] = 0);
     
@@ -410,15 +409,13 @@ window.generateSchedule = function() {
         let activeTeamsInRound = [];
         
         window.data.courts.forEach(court => {
-            // Find candidates: Pairs where neither team is playing this round
+            // Find candidates: Pairs where neither team is active this round
             let candidates = matchPool.filter(m => 
                 !activeTeamsInRound.includes(m.t1) && !activeTeamsInRound.includes(m.t2)
             );
             
             if(candidates.length > 0) {
-                // FAIRNESS LOGIC:
-                // Sort candidates by total matches played (ascending).
-                // This ensures teams lagging behind get picked first.
+                // FAIRNESS LOGIC: Priority to least played teams
                 candidates.sort((a,b) => {
                     let playedA = playCounts[a.t1] + playCounts[a.t2];
                     let playedB = playCounts[b.t1] + playCounts[b.t2];
@@ -437,18 +434,16 @@ window.generateSchedule = function() {
                     s1: null, s2: null, done: false
                 });
                 
-                // Update stats
                 activeTeamsInRound.push(match.t1, match.t2);
                 playCounts[match.t1]++;
                 playCounts[match.t2]++;
                 
-                // Remove from pool (so they don't play again until pool reset if needed)
-                // Note: For a tournament with few teams/many rounds, we might need to recycle the pool.
-                // Simple check: If pool empty, re-generate.
+                // Remove used pairing from pool
                 let poolIdx = matchPool.indexOf(match);
                 if(poolIdx > -1) matchPool.splice(poolIdx, 1);
+                
+                // Refill pool if empty (Rematch allowed if needed)
                 if(matchPool.length === 0) {
-                    // Refill logic (duplicate code from above, simplified)
                     for(let i=0; i<tIds.length; i++) {
                         for(let j=i+1; j<tIds.length; j++) {
                             matchPool.push({ t1: tIds[i], t2: tIds[j] });
@@ -459,7 +454,6 @@ window.generateSchedule = function() {
             }
         });
         
-        // Advance time
         currentTime.setMinutes(currentTime.getMinutes() + matchDur + breakDur);
     }
     
