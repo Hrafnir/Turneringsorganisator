@@ -1,4 +1,4 @@
-/* Version: #21 */
+/* Version: #22 */
 :root {
     --bg: #121212;
     --panel: #1e1e1e;
@@ -126,7 +126,7 @@ textarea { height: 150px; resize: vertical; margin-bottom: 10px; }
 .custom-mix-panel { width: 100%; border-top: 1px dashed #444; padding-top: 10px; margin-top: 10px; }
 .checkbox-group { display: flex; gap: 15px; }
 .draw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }
-.team-card { background: #252525; border: 1px solid #444; border-radius: 6px; overflow: hidden; }
+.team-card { background: #252525; border: 1px solid #444; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; }
 .team-card h3 { background: #151515; margin: 0; padding: 10px; text-align: center; font-size: 1.1rem; border-bottom: 1px solid #333; }
 .team-card h3 input { background: transparent; border: none; text-align: center; font-weight: bold; color: var(--accent); }
 .team-member { padding: 8px 10px; border-bottom: 1px solid #333; font-size: 0.9rem; cursor: grab; display: flex; justify-content: space-between; }
@@ -134,43 +134,38 @@ textarea { height: 150px; resize: vertical; margin-bottom: 10px; }
 .team-member.dragging { background: var(--blue); color: white; opacity: 0.8; }
 .team-card.drag-over { border: 2px dashed var(--blue); background: #2a2a2a; }
 
-/* =========================================
-   TAB 4: REFEREES (NY)
-   ========================================= */
-#refereeList { max-height: 400px; overflow-y: auto; }
-.referee-item {
-    background: #252525; padding: 10px; border-radius: 4px; margin-bottom: 5px;
-    border-left: 3px solid var(--yellow); display: flex; justify-content: space-between; align-items: center;
-}
-.ref-info { font-weight: bold; color: white; }
-.ref-time { color: #888; font-size: 0.9rem; margin-left: 10px; }
+/* Add player row in team card (New in v22) */
+.add-member-row { display: flex; gap: 5px; padding: 10px; border-top: 1px solid #333; background: #1a1a1a; margin-top: auto; }
+.add-member-row input { padding: 4px; font-size: 0.8rem; }
+.add-member-row button { padding: 4px 8px; font-size: 0.8rem; background: var(--green); color: white; }
 
 /* =========================================
-   TAB 5: SCHEDULE & RESULTS
+   TAB 4: SCHEDULE & RESULTS
    ========================================= */
 .schedule-actions { display: flex; justify-content: space-between; margin-bottom: 20px; padding: 10px; background: #222; border-radius: 4px; }
 .print-header { display: none; } 
 
 .match-round-block { margin-bottom: 30px; border: 1px solid #333; border-radius: 6px; overflow: hidden; }
 .match-round-header { background: #1a1a1a; padding: 10px; border-bottom: 1px solid #333; color: var(--blue); font-weight: bold; font-size: 1.1rem; }
-
-/* Justert grid for å få plass til dommer-meny */
 .match-item { 
-    display: grid; 
-    grid-template-columns: 80px 1fr 180px 100px; /* Court | Teams | Referee | Score */
-    align-items: center; padding: 10px; background: #252525; border-bottom: 1px solid #333; gap: 10px;
+    display: grid; grid-template-columns: 120px 1fr 180px; /* Adjusted columns */
+    align-items: center; padding: 10px; background: #252525; border-bottom: 1px solid #333; 
 }
 .match-item:last-child { border-bottom: none; }
-.match-court { font-weight: bold; color: #888; font-size: 0.9rem; text-align:center; }
+.match-court { font-weight: bold; color: #888; font-size: 0.9rem; }
 .match-teams { font-size: 1.1rem; }
-.match-referee select { font-size: 0.9rem; padding: 5px; background: #151515; border: 1px solid #444; width: 100%; }
-.match-inputs { display: flex; gap: 5px; align-items: center; justify-content: flex-end; }
-.match-inputs input { width: 40px; text-align: center; font-size: 1.1rem; background: #111; border: 1px solid #444; }
 
-.match-print-score-box { display: none; } /* Hidden on screen */
+/* Større input felt for resultater (New in v22) */
+.match-inputs { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+.match-inputs input { 
+    width: 70px; height: 40px; 
+    text-align: center; font-size: 1.4rem; font-weight: bold;
+    background: #111; border: 2px solid #444; border-radius: 4px;
+}
+.match-inputs input:focus { border-color: var(--accent); }
 
 /* =========================================
-   TAB 6: CONTROL
+   TAB 5: CONTROL
    ========================================= */
 .control-panel-wrapper { text-align: center; max-width: 800px; margin: 0 auto; }
 .timer-box { 
@@ -187,7 +182,7 @@ textarea { height: 150px; resize: vertical; margin-bottom: 10px; }
 .manual-adjust:hover { opacity: 1; }
 
 /* =========================================
-   TAB 7: FINALS
+   TAB 6: FINALS
    ========================================= */
 .leaderboard-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
 .leaderboard-table th { text-align: left; border-bottom: 2px solid #444; padding: 10px; color: #888; }
@@ -210,67 +205,49 @@ textarea { height: 150px; resize: vertical; margin-bottom: 10px; }
    ========================================= */
 @page {
     size: A4;
-    margin: 5mm;
+    margin: 5mm 10mm;
 }
 
 @media print {
-    .no-print, nav, .tabs-bar, button, .input-section, .class-input-row, .config-box h3, .small-info { display: none !important; }
+    /* Hide digital UI */
+    .no-print, nav, .tabs-bar, button, .input-section, .class-input-row, .config-box h3, .small-info, .add-member-row { display: none !important; }
     
     body { background: white; color: black; font-size: 10pt; overflow: visible; }
     .container { box-shadow: none; padding: 0; margin: 0; max-width: 100%; border: none; }
-    .print-container { display: block !important; }
     
+    /* Header */
+    .print-container { display: block !important; }
     .print-header { display: block !important; text-align: center; border-bottom: 2px solid black; margin-bottom: 10px; padding-bottom: 5px; }
-    .print-header h1 { color: black; font-size: 18pt; margin: 0; }
+    .print-header h1 { color: black; font-size: 20pt; margin: 0; }
     
     /* Teams Draw */
     #draw .container { display: block; }
     .draw-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .team-card { background: white; border: 1px solid black; break-inside: avoid; page-break-inside: avoid; color: black; box-shadow: none; }
-    .team-card h3 { background: #eee; color: black; border-bottom: 1px solid black; padding: 2px; font-size: 12pt; margin:0; }
-    .team-card h3 input { color: black; border: none; font-weight: bold; }
+    .team-card { background: white; border: 1px solid black; break-inside: avoid; page-break-inside: avoid; color: black; box-shadow: none; font-size: 9pt; }
+    .team-card h3 { background: #eee; color: black; border-bottom: 1px solid black; padding: 2px; font-size: 11pt; margin:0; }
+    .team-card h3 input { color: black; border: none; font-weight: bold; font-size: 11pt; }
     .team-member { color: black; border-bottom: 1px solid #ccc; padding: 2px 4px; font-size: 9pt; }
     .team-class-badge { border: 1px solid #000; color: black; padding: 0 2px; font-weight: bold; }
 
-    /* Schedule */
+    /* Schedule Print */
     #scheduleContainer { display: block; }
-    .match-round-block { border: 1px solid black; margin-bottom: 5px; break-inside: avoid; page-break-inside: avoid; }
-    .match-round-header { background: #ddd; color: black; border-bottom: 1px solid black; font-weight: bold; padding: 3px; font-size: 10pt; }
-    
+    .match-round-block { border: 1px solid black; margin-bottom: 8px; break-inside: avoid; page-break-inside: avoid; }
+    .match-round-header { background: #ddd; color: black; border-bottom: 1px solid black; font-weight: bold; padding: 4px; font-size: 10pt; }
     .match-item { 
         background: white; color: black; border-bottom: 1px solid #000; 
-        grid-template-columns: 50px 1fr 120px 80px; /* Adjusted columns for print */
+        grid-template-columns: 60px 1fr 80px; 
         padding: 3px; font-size: 10pt;
     }
-    .match-court { color: #333; font-weight: normal; font-size: 8pt; }
+    .match-court { color: #333; font-weight: normal; }
     
-    /* Hide digital inputs */
-    .match-inputs { display: none; }
-    
-    /* Show Score Boxes */
-    .match-print-score-box {
-        display: flex !important;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 5px;
-    }
-    .score-box {
-        width: 30px;
-        height: 20px;
-        border: 1px solid black;
+    /* Result Boxes for Print */
+    .match-inputs input { display: none; }
+    .match-inputs::after { 
+        content: ""; 
+        display: block; width: 60px; height: 18px; border: 1px solid black; 
         background: white;
-    }
-    
-    /* Show Referee text instead of dropdown */
-    .match-referee select { display: none; }
-    .match-referee::after {
-        content: attr(data-print-ref); /* JS sets this attribute */
-        display: block;
-        color: black;
-        font-size: 9pt;
-        font-style: italic;
     }
     
     #app { zoom: 0.9; }
 }
-/* Version: #21 */
+/* Version: #22 */
