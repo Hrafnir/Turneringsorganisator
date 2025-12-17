@@ -1,10 +1,10 @@
-<!-- Version: #21 -->
+<!-- Version: #22 -->
 <!DOCTYPE html>
 <html lang="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Turneringssjefen v21.0</title>
+    <title>Turneringssjefen v22.0</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -28,7 +28,7 @@
         <!-- NAVIGATION (Skjules på print) -->
         <nav class="no-print">
             <div class="logo-area">
-                <div class="logo">🏆 <span id="displayTitle">Turnering</span> <span class="version">v21.0</span></div>
+                <div class="logo">🏆 <span id="displayTitle">Turnering</span> <span class="version">v22.0</span></div>
                 <input type="text" id="tournamentTitleInput" placeholder="Navn på turnering..." onchange="updateTitle(this.value)" class="title-input">
             </div>
             
@@ -49,10 +49,9 @@
             <button onclick="showTab('setup')" class="active">1. Elever</button>
             <button onclick="showTab('arena')">2. Arena</button>
             <button onclick="showTab('draw')">3. Lag</button>
-            <button onclick="showTab('referees')">4. Dommere</button>
-            <button onclick="showTab('schedule')">5. Kampplan</button>
-            <button onclick="showTab('control')" class="tab-highlight">6. KAMPSTYRING</button>
-            <button onclick="showTab('finals')">7. Finale</button>
+            <button onclick="showTab('schedule')">4. Kamper & Resultater</button>
+            <button onclick="showTab('control')" class="tab-highlight">5. KAMPSTYRING</button>
+            <button onclick="showTab('finals')">6. Tabell & Finale</button>
         </div>
 
         <!-- TAB 1: OPPSETT -->
@@ -62,8 +61,8 @@
                 <div class="setup-grid">
                     <div class="input-section">
                         <div class="class-input-row">
-                            <input type="text" id="newClassInput" placeholder="Ny klasse (eks 10E)..." style="width:150px;">
-                            <button onclick="addClass()" class="btn-green">Opprett Klasse</button>
+                            <input type="text" id="newClassInput" placeholder="Ny klasse..." style="width:150px;">
+                            <button onclick="addClass()" class="btn-green">Opprett</button>
                         </div>
                         <label>Velg klasse for import:</label>
                         <div id="classButtons" class="class-buttons"></div>
@@ -75,6 +74,7 @@
                             <h3>Påmeldte (<span id="studentCount">0</span>)</h3>
                             <input type="text" id="studentSearch" placeholder="🔍 Søk..." onkeyup="renderStudentList()" class="search-input">
                         </div>
+                        <p class="small-info">Fjern haken ved eleven for å markere som fraværende.</p>
                         <div id="studentList" class="student-grid"></div>
                         <button onclick="clearStudents()" class="btn-text-red" style="margin-top:10px;">Slett alle elever</button>
                     </div>
@@ -91,17 +91,23 @@
                 <h2>2. Baner og Innstillinger</h2>
                 <div class="config-grid">
                     <div class="config-box">
-                        <h3>🏟️ Baner</h3>
+                        <h3>🏟️ Baner og Aktiviteter</h3>
+                        <p class="small-info">Skriv inn aktivitet (eks: "Volleyball", "Sjakk", "Bordtennis").</p>
                         <div id="courtList"></div>
                         <button onclick="addCourt()" class="btn-green-outline">+ Legg til bane</button>
                     </div>
                     <div class="config-box">
-                        <h3>⚙️ Tidsplan</h3>
+                        <h3>⚙️ Tidsplan & Runder</h3>
                         <div class="form-row"><label>Starttid:</label><input type="time" id="startTime" value="10:15"></div>
                         <div class="form-row"><label>Finalestart:</label><input type="time" id="finalsTime" value="14:00"></div>
                         <div class="form-row"><label>Kamp (min):</label><input type="number" id="matchDuration" value="15"></div>
                         <div class="form-row"><label>Pause (min):</label><input type="number" id="breakDuration" value="5"></div>
-                        <div class="form-row"><label>Runder:</label><input type="number" id="roundsCount" value="10"></div>
+                        <hr style="border:0; border-top:1px solid #444; margin:15px 0;">
+                        <div class="form-row">
+                            <label style="color:var(--accent); font-weight:bold;">Antall runder:</label>
+                            <input type="number" id="roundsCount" value="10" style="border-color:var(--accent);">
+                        </div>
+                        <p class="small-info">Algoritmen balanserer både totalt antall kamper og antall kamper per aktivitet.</p>
                     </div>
                 </div>
                 <div class="footer-actions">
@@ -110,93 +116,76 @@
             </div>
         </div>
 
-        <!-- TAB 3: LAG -->
+        <!-- TAB 3: LAGINNDELING -->
         <div id="draw" class="tab-content">
             <div class="container">
                 <div class="print-header">
                     <h1 id="printTitleTeams">Lister</h1>
                 </div>
+
                 <div class="no-print">
                     <h2>3. Generer Lag</h2>
                     <div class="draw-controls">
                         <div class="draw-option">
                             <label>Fordeling:</label>
                             <select id="drawStrategy" onchange="toggleCustomMix()">
-                                <option value="balanced">⚖️ Perfekt Miks</option>
+                                <option value="balanced">⚖️ Perfekt Miks (Jevn)</option>
                                 <option value="class_based">🏫 Klassevis</option>
                                 <option value="ab_cd">🅰️🅱️ Base-miks</option>
                                 <option value="custom">🛠️ Egendefinert</option>
                                 <option value="random">🎲 Kaos</option>
                             </select>
                         </div>
+                        
                         <div id="customMixPanel" class="hidden custom-mix-panel">
-                            <p>Pulje 1:</p><div id="customClassCheckboxes" class="checkbox-group"></div>
+                            <p>Pulje 1 (resten til Pulje 2):</p>
+                            <div id="customClassCheckboxes" class="checkbox-group"></div>
                         </div>
+
                         <div class="draw-option">
                             <label>Antall lag:</label>
                             <input type="number" id="teamCount" value="12" style="width:60px;">
                         </div>
+
                         <button class="btn-primary" onclick="generateTeams()">⚡ Generer</button>
-                        <button class="btn-grey" onclick="window.print()"><i class="fas fa-print"></i> Skriv ut</button>
-                        <button id="lockBtn" class="btn-yellow" onclick="toggleLockTeams()">Åpen</button>
+                        <button class="btn-grey" onclick="window.print()"><i class="fas fa-print"></i> Skriv ut Laglister</button>
+                        <button id="lockBtn" class="btn-yellow" onclick="toggleLockTeams()"><i class="fas fa-unlock"></i> Åpen</button>
                     </div>
+                    <p class="info-text">Dra og slipp elever for å endre lag manuelt.</p>
                 </div>
+                
                 <div id="drawDisplay" class="draw-grid"></div>
+                
                 <div class="generate-section no-print">
-                    <button class="btn-primary" onclick="showTab('referees')">Neste: Dommere <i class="fas fa-arrow-right"></i></button>
+                    <button class="btn-spectacular" onclick="generateSchedule()">📅 Generer Kampoppsett</button>
                 </div>
             </div>
         </div>
 
-        <!-- TAB 4: DOMMERE (NY!) -->
-        <div id="referees" class="tab-content no-print">
-            <div class="container">
-                <h2>4. Dommere</h2>
-                <div class="setup-grid">
-                    <div class="input-section">
-                        <h3>Legg til Dommer</h3>
-                        <input type="text" id="refNameInput" placeholder="Navn (f.eks. Kari Nordmann)">
-                        <div class="form-row">
-                            <label>Tilgjengelig fra:</label>
-                            <input type="time" id="refTimeFrom" value="10:00">
-                        </div>
-                        <div class="form-row">
-                            <label>Tilgjengelig til:</label>
-                            <input type="time" id="refTimeTo" value="14:30">
-                        </div>
-                        <button onclick="addReferee()" class="btn-primary block-btn">Legg til Dommer</button>
-                    </div>
-                    <div class="list-section">
-                        <h3>Dommerliste (<span id="refCount">0</span>)</h3>
-                        <p class="small-info">Dommere brukes til å dekke kamper. Vi trenger ca 3 pr runde.</p>
-                        <div id="refereeList" class="student-grid"></div>
-                    </div>
-                </div>
-                <div class="footer-actions">
-                    <button class="btn-spectacular" onclick="generateSchedule()">📅 Generer Kampoppsett & Fordel Dommere</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB 5: KAMPPLAN -->
+        <!-- TAB 4: KAMPPLAN & RESULTATER -->
         <div id="schedule" class="tab-content">
             <div class="container">
-                <div class="print-header"><h1>Kampoppsett</h1></div>
-                <div class="schedule-actions no-print">
-                    <button onclick="window.print()" class="btn-grey"><i class="fas fa-print"></i> Skriv ut Dommerkort</button>
-                    <button onclick="autoAssignReferees()" class="btn-yellow"><i class="fas fa-user-friends"></i> Fordel Dommere på nytt</button>
-                    <button onclick="addManualMatch()" class="btn-text">+ Ekstra</button>
-                    <button onclick="clearSchedule()" class="btn-text-red">Slett alt</button>
+                <div class="print-header">
+                    <h1>Kampoppsett</h1>
                 </div>
+
+                <div class="schedule-actions no-print">
+                    <button onclick="window.print()" class="btn-grey"><i class="fas fa-print"></i> Skriv ut Oppsett</button>
+                    <button onclick="addManualMatch()" class="btn-text">+ Ekstra kamp</button>
+                    <button onclick="clearSchedule()" class="btn-text-red">Slett oppsett</button>
+                </div>
+
                 <div id="scheduleContainer"></div>
             </div>
         </div>
 
-        <!-- TAB 6: KAMPSTYRING -->
+        <!-- TAB 5: KAMPSTYRING -->
         <div id="control" class="tab-content no-print">
             <div class="control-panel-wrapper">
                 <h1>KAMPSTYRING</h1>
-                <div class="timer-box"><div id="mainTimer">15:00</div></div>
+                <div class="timer-box">
+                    <div id="mainTimer">15:00</div>
+                </div>
                 <div class="control-buttons">
                     <button onclick="timerStart()" class="btn-ctrl btn-green"><i class="fas fa-play"></i> START</button>
                     <button onclick="timerPause()" class="btn-ctrl btn-yellow"><i class="fas fa-pause"></i> PAUSE</button>
@@ -213,7 +202,7 @@
             </div>
         </div>
 
-        <!-- TAB 7: FINALE -->
+        <!-- TAB 6: TABELL & FINALE -->
         <div id="finals" class="tab-content no-print">
             <div class="container">
                 <h2>Tabell</h2>
@@ -221,21 +210,24 @@
                     <thead><tr><th>#</th><th>Lag</th><th>K</th><th>S</th><th>U</th><th>T</th><th>MF</th><th>Poeng</th></tr></thead>
                     <tbody id="leaderboardBody"></tbody>
                 </table>
+
                 <div class="finals-section">
-                    <h2>Finale</h2>
+                    <h2>Finale & Plassering</h2>
                     <div class="final-setup-row">
                         <label>Lag A:</label><select id="finalTeam1"></select>
                         <label>Lag B:</label><select id="finalTeam2"></select>
                         <label>Navn:</label><input type="text" id="finalName" value="Gullfinale">
-                        <button onclick="createFinalMatch()" class="btn-primary">Opprett</button>
+                        <button onclick="createFinalMatch()" class="btn-primary">Opprett Finale</button>
                     </div>
+                    
                     <div id="finalsList" class="finals-list"></div>
                 </div>
             </div>
         </div>
 
     </div>
+
     <script src="script.js"></script>
 </body>
 </html>
-<!-- Version: #21 -->
+<!-- Version: #22 -->
