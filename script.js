@@ -1,18 +1,17 @@
-/* Version: #21 */
+/* Version: #22 */
 
 // =============================================================
 // 1. GLOBAL STATE
 // =============================================================
 window.data = {
     title: "Skoleturnering",
-    classes: ["10A", "10B", "10C", "10D"],
+    classes: ["8A", "8B", "8C", "8D", "9A", "9B", "9C", "9D", "10A", "10B", "10C", "10D"],
     students: [],
     courts: [
         { id: 1, name: "Bane 1", type: "Volleyball" },
         { id: 2, name: "Bane 2", type: "Volleyball" },
         { id: 3, name: "Bane 3", type: "Stikkball" }
     ],
-    referees: [], // {id, name, from, to}
     teams: [],
     matches: [],
     finals: [],
@@ -34,50 +33,50 @@ let isTimerRunning = false;
 // Audio
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-// Drag Drop
+// Drag Drop State
 let draggedMemberId = null;
 let draggedFromTeamId = null;
 
 // =============================================================
-// 2. INIT
+// 2. INITIALIZATION
 // =============================================================
 document.addEventListener("DOMContentLoaded", () => {
     loadLocal();
+    
+    // Default classes if empty (Generic Setup)
     if (!window.data.classes || window.data.classes.length === 0) {
-        window.data.classes = ["10A", "10B", "10C", "10D"];
+        window.data.classes = ["8A", "8B", "8C", "8D", "9A", "9B", "9C", "9D", "10A", "10B", "10C", "10D"];
     }
+
     renderClassButtons();
     renderStudentList();
     renderCourts();
-    renderRefereeList(); // Ny i v21
     
     if(window.data.teams.length > 0) renderTeams();
     if(window.data.matches.length > 0) renderSchedule();
     updateLeaderboard();
+    
     updateTimerDisplay();
     
     showTab('setup');
 });
 
 // =============================================================
-// 3. PERSISTENCE
+// 3. PERSISTENCE & UTILS
 // =============================================================
 window.saveLocal = function() {
-    localStorage.setItem('ts_v21_data', JSON.stringify(window.data));
+    localStorage.setItem('ts_v22_data', JSON.stringify(window.data));
 };
 
 function loadLocal() {
-    const json = localStorage.getItem('ts_v21_data');
+    const json = localStorage.getItem('ts_v22_data');
     if(json) {
         try {
             const parsed = JSON.parse(json);
             window.data = { ...window.data, ...parsed };
-            // Ensure referees array exists if loading old data
-            if(!window.data.referees) window.data.referees = [];
-        } catch(e) { console.error("Data load error", e); }
+        } catch(e) { console.error("Data load fail", e); }
     }
     
-    // Update inputs
     const ids = ['displayTitle','tournamentTitleInput','printTitle','printTitleTeams'];
     ids.forEach(id => {
         const el = document.getElementById(id);
@@ -96,7 +95,7 @@ function loadLocal() {
 window.updateTitle = function(val) {
     window.data.title = val;
     document.getElementById('displayTitle').innerText = val;
-    document.getElementById('printTitle').innerText = val;
+    if(document.getElementById('printTitle')) document.getElementById('printTitle').innerText = val;
     if(document.getElementById('printTitleTeams')) document.getElementById('printTitleTeams').innerText = val;
     saveLocal();
 };
@@ -105,7 +104,7 @@ window.genId = function() { return Math.random().toString(36).substr(2, 9); };
 
 window.confirmReset = function() {
     if(confirm("Er du sikker på at du vil slette ALT?")) {
-        localStorage.removeItem('ts_v21_data');
+        localStorage.removeItem('ts_v22_data');
         location.reload();
     }
 };
@@ -115,7 +114,7 @@ window.showTab = function(id) {
     document.querySelectorAll('.tabs-bar button').forEach(el => el.classList.remove('active'));
     document.getElementById(id).classList.add('active');
     
-    const map = {'setup':0,'arena':1,'draw':2,'referees':3,'schedule':4,'control':5,'finals':6};
+    const map = {'setup':0,'arena':1,'draw':2,'schedule':3,'control':4,'finals':5};
     const btns = document.querySelectorAll('.tabs-bar button');
     if(map[id] !== undefined && btns[map[id]]) btns[map[id]].classList.add('active');
 };
@@ -136,7 +135,7 @@ window.renderClassButtons = function() {
     });
     if(!selectedClass && window.data.classes.length > 0) {
         selectedClass = window.data.classes[0];
-        if(d.children.length>0) d.children[0].classList.add('selected');
+        renderClassButtons();
     }
     renderCustomMixCheckboxes();
 };
@@ -147,7 +146,9 @@ window.addClass = function() {
         window.data.classes.push(val); window.data.classes.sort();
         saveLocal(); renderClassButtons();
     }
+    document.getElementById('newClassInput').value = "";
 };
+
 window.delClass = function(c, e) {
     e.stopPropagation();
     if(confirm(`Slette klassen ${c}?`)) {
@@ -156,12 +157,19 @@ window.delClass = function(c, e) {
         saveLocal(); renderClassButtons();
     }
 };
+
 window.addStudents = function() {
     if(!selectedClass) return alert("Velg en klasse først.");
     const txt = document.getElementById('pasteArea').value;
-    txt.split('\n').forEach(l => { const n=l.trim(); if(n) window.data.students.push({id:genId(), name:n, class:selectedClass, present:true}); });
-    document.getElementById('pasteArea').value = ""; saveLocal(); renderStudentList();
+    const lines = txt.split('\n');
+    lines.forEach(line => {
+        const name = line.trim();
+        if(name) window.data.students.push({ id: genId(), name: name, class: selectedClass, present: true });
+    });
+    document.getElementById('pasteArea').value = "";
+    saveLocal(); renderStudentList();
 };
+
 window.renderStudentList = function() {
     const c = document.getElementById('studentList'); if(!c) return; c.innerHTML = '';
     const q = document.getElementById('studentSearch').value.toLowerCase();
@@ -219,6 +227,7 @@ function shuffle(arr) {
         [arr[i], arr[j]] = [arr[j], arr[i]];
     }
 }
+
 window.generateTeams = function() {
     if(window.data.teamsLocked) return alert("Lagene er låst. Lås opp først.");
     const count = parseInt(document.getElementById('teamCount').value);
@@ -235,9 +244,7 @@ window.generateTeams = function() {
         let deck = []; let anyLeft = true;
         while(anyLeft) {
             anyLeft = false;
-            window.data.classes.forEach(c => {
-                if(buckets[c] && buckets[c].length > 0) { deck.push(buckets[c].pop()); anyLeft = true; }
-            });
+            window.data.classes.forEach(c => { if(buckets[c] && buckets[c].length > 0) { deck.push(buckets[c].pop()); anyLeft = true; } });
         }
         deck.forEach((s, i) => { window.data.teams[i % count].members.push(s); });
     }
@@ -274,6 +281,7 @@ window.generateTeams = function() {
     saveLocal(); renderTeams();
 };
 
+// Drag & Drop
 window.handleDragStart = function(e, mId, tId) {
     if(window.data.teamsLocked) { e.preventDefault(); return; }
     draggedMemberId = mId; draggedFromTeamId = tId;
@@ -291,145 +299,47 @@ window.handleDrop = function(e, tId) {
     }
     document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
 };
+
 window.renderTeams = function() {
     const d = document.getElementById('drawDisplay'); d.innerHTML = '';
     window.data.teams.forEach(t => {
         const card = document.createElement('div'); card.className = 'team-card';
         card.ondragover = window.handleDragOver; card.ondragleave = window.handleDragLeave; card.ondrop = (e) => window.handleDrop(e, t.id);
+        
         let membersHtml = t.members.map((m, i) => `
             <div class="team-member" draggable="true" ondragstart="handleDragStart(event, '${m.id}', ${t.id})">
                 <span>${i+1}. ${m.name}</span><span class="team-class-badge">${m.class}</span>
             </div>`).join('');
-        card.innerHTML = `<h3><input value="${t.name}" onchange="renameTeam(${t.id}, this.value)"></h3><div>${membersHtml}</div>`;
+        
+        card.innerHTML = `
+            <h3><input value="${t.name}" onchange="renameTeam(${t.id}, this.value)"></h3>
+            <div>${membersHtml}</div>
+            <div class="add-member-row">
+                <input type="text" id="addMem_${t.id}" placeholder="Legg til navn...">
+                <button onclick="addMemberToTeam(${t.id})">OK</button>
+            </div>
+        `;
         d.appendChild(card);
     });
     const btn = document.getElementById('lockBtn');
     btn.className = window.data.teamsLocked ? 'btn-small-red' : 'btn-yellow';
-    btn.innerText = window.data.teamsLocked ? '🔒 Låst' : '🔓 Åpen';
+    btn.innerText = window.data.teamsLocked ? '🔒 Låst (Klikk for å åpne)' : '🔓 Åpen (Klikk for å låse)';
 };
+
+window.addMemberToTeam = function(teamId) {
+    const inp = document.getElementById(`addMem_${teamId}`);
+    if(inp && inp.value) {
+        const team = window.data.teams.find(t => t.id === teamId);
+        team.members.push({id: genId(), name: inp.value, class: "Manuell", present: true});
+        saveLocal(); renderTeams();
+    }
+};
+
 window.renameTeam = function(id, val) { const t = window.data.teams.find(t => t.id == id); if(t) { t.name = val; saveLocal(); updateLeaderboard(); } };
 window.toggleLockTeams = function() { window.data.teamsLocked = !window.data.teamsLocked; saveLocal(); renderTeams(); };
 
 // =============================================================
-// 7. REFEREES (NY)
-// =============================================================
-window.addReferee = function() {
-    const name = document.getElementById('refNameInput').value;
-    const f = document.getElementById('refTimeFrom').value;
-    const t = document.getElementById('refTimeTo').value;
-    if(name) {
-        window.data.referees.push({ id: genId(), name: name, from: f, to: t });
-        document.getElementById('refNameInput').value = "";
-        saveLocal(); renderRefereeList();
-    }
-};
-
-window.renderRefereeList = function() {
-    const list = document.getElementById('refereeList');
-    if(!list) return;
-    list.innerHTML = '';
-    document.getElementById('refCount').innerText = window.data.referees.length;
-    window.data.referees.forEach((r, i) => {
-        const div = document.createElement('div');
-        div.className = 'referee-item';
-        div.innerHTML = `
-            <span class="ref-info">${r.name} <span class="ref-time">(${r.from}-${r.to})</span></span>
-            <button class="btn-text-red" onclick="delReferee(${i})">Slett</button>
-        `;
-        list.appendChild(div);
-    });
-};
-
-window.delReferee = function(idx) {
-    if(confirm("Slette dommer?")) {
-        window.data.referees.splice(idx, 1);
-        saveLocal(); renderRefereeList();
-    }
-};
-
-// AUTO-ASSIGN ALGO
-window.autoAssignReferees = function() {
-    if(window.data.matches.length === 0) return alert("Ingen kamper!");
-    if(window.data.referees.length === 0) return alert("Ingen dommere registrert!");
-    
-    // Sort matches by time
-    let sortedMatches = [...window.data.matches].sort((a,b) => a.time.localeCompare(b.time));
-    
-    // Get all unique match times
-    let matchTimes = [...new Set(sortedMatches.map(m => m.time))];
-    
-    // Tracking usage
-    let refStats = {}; // { id: { assigned: 0, consecutive: 0, lastTime: '' } }
-    window.data.referees.forEach(r => refStats[r.id] = { assigned: 0, consecutive: 0, lastTime: '' });
-    
-    matchTimes.forEach(time => {
-        // Matches in this block
-        let blockMatches = sortedMatches.filter(m => m.time === time);
-        
-        // Available refs for this time
-        let availableRefs = window.data.referees.filter(r => r.from <= time && r.to >= time);
-        
-        // Reset consecutive for refs NOT working this round (handled after assignment)
-        let workingRefs = [];
-        
-        blockMatches.forEach(match => {
-            // Score candidates
-            // Rules: 
-            // 1. Must be available.
-            // 2. Prefer < 3 consecutive.
-            // 3. Prefer fewest total assigned (fairness).
-            // 4. Bonus for random shuffle to mix.
-            
-            // Sort available refs by score
-            availableRefs.sort((a,b) => {
-                let statsA = refStats[a.id];
-                let statsB = refStats[b.id];
-                
-                // Penalty for consecutive >= 3 (Need break)
-                let penA = statsA.consecutive >= 3 ? 100 : 0;
-                let penB = statsB.consecutive >= 3 ? 100 : 0;
-                
-                // Sort by penalty first, then total assigned
-                if(penA !== penB) return penA - penB;
-                return statsA.assigned - statsB.assigned;
-            });
-            
-            // Pick best
-            if(availableRefs.length > 0) {
-                // If top candidate has penalty, try to find someone else?
-                // The sort puts penalized at bottom, so we pick [0] which is best available.
-                // But if [0] is also penalized (everyone tired), we must use them.
-                
-                let chosen = availableRefs[0];
-                match.referee = chosen.name;
-                match.refId = chosen.id;
-                
-                refStats[chosen.id].assigned++;
-                refStats[chosen.id].consecutive++;
-                workingRefs.push(chosen.id);
-                
-                // Remove from available for this specific block so they don't ref 2 matches at once
-                availableRefs.shift();
-            } else {
-                match.referee = ""; // No ref available
-            }
-        });
-        
-        // Reset consecutive for those who rested
-        window.data.referees.forEach(r => {
-            if(!workingRefs.includes(r.id)) {
-                refStats[r.id].consecutive = 0;
-            }
-        });
-    });
-    
-    saveLocal();
-    renderSchedule();
-    alert("Dommere fordelt!");
-};
-
-// =============================================================
-// 8. SCHEDULE
+// 7. SCHEDULE (FAIR PLAY + COURT BALANCE)
 // =============================================================
 window.generateSchedule = function() {
     if(!window.data.teamsLocked) { if(!confirm("Låse lag?")) return; window.toggleLockTeams(); }
@@ -439,39 +349,75 @@ window.generateSchedule = function() {
     const matchDur = parseInt(window.data.settings.matchDuration);
     const breakDur = parseInt(window.data.settings.breakDuration);
     
+    // 1. Generate pairing pool
     let matchPool = [];
     let tIds = window.data.teams.map(t => t.id);
     for(let i=0; i<tIds.length; i++) { for(let j=i+1; j<tIds.length; j++) { matchPool.push({ t1: tIds[i], t2: tIds[j] }); } }
     shuffle(matchPool);
     
-    let playCounts = {};
-    window.data.teams.forEach(t => playCounts[t.id] = 0);
-    window.data.matches = [];
+    // Tracking stats for fairness
+    // { teamId: { total: 0, courts: { "Bane 1": 0, "Volleyball": 0 ... } } }
+    let stats = {};
+    window.data.teams.forEach(t => stats[t.id] = { total: 0, courts: {} });
     
+    window.data.matches = [];
     let currentTime = new Date();
     const [sh, sm] = window.data.settings.startTime.split(':');
     currentTime.setHours(sh, sm, 0);
     
+    // 2. Fill Rounds
     for(let r=1; r <= roundsCount; r++) {
         let activeTeamsInRound = [];
+        
         window.data.courts.forEach(court => {
-            let candidates = matchPool.filter(m => !activeTeamsInRound.includes(m.t1) && !activeTeamsInRound.includes(m.t2));
+            // Filter eligible candidates
+            let candidates = matchPool.filter(m => 
+                !activeTeamsInRound.includes(m.t1) && !activeTeamsInRound.includes(m.t2)
+            );
+            
             if(candidates.length > 0) {
-                candidates.sort((a,b) => (playCounts[a.t1]+playCounts[a.t2]) - (playCounts[b.t1]+playCounts[b.t2]));
+                // FAIRNESS SCORE CALCULATION
+                // We want to minimize: A) Total Matches Played, B) Matches Played on THIS court/type
+                candidates.sort((a,b) => {
+                    let sA_t1 = stats[a.t1], sA_t2 = stats[a.t2];
+                    let sB_t1 = stats[b.t1], sB_t2 = stats[b.t2];
+                    
+                    // Total matches factor
+                    let totalA = sA_t1.total + sA_t2.total;
+                    let totalB = sB_t1.total + sB_t2.total;
+                    
+                    // Court specific factor (check specific court name or type if available)
+                    // We use court.name for tracking specific court balance
+                    let courtA = (sA_t1.courts[court.name] || 0) + (sA_t2.courts[court.name] || 0);
+                    let courtB = (sB_t1.courts[court.name] || 0) + (sB_t2.courts[court.name] || 0);
+                    
+                    // Weighted score: Total matches matters most, then court balance
+                    let scoreA = (totalA * 10) + courtA;
+                    let scoreB = (totalB * 10) + courtB;
+                    
+                    return scoreA - scoreB;
+                });
+                
                 let match = candidates[0];
                 const timeStr = currentTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                
                 window.data.matches.push({
                     id: genId(), time: timeStr,
                     t1: match.t1, t2: match.t2,
                     court: court.name, type: court.type,
-                    s1: null, s2: null, done: false,
-                    referee: "" // Placeholder
+                    s1: null, s2: null, done: false
                 });
+                
+                // Update stats
                 activeTeamsInRound.push(match.t1, match.t2);
-                playCounts[match.t1]++; playCounts[match.t2]++;
+                stats[match.t1].total++; stats[match.t2].total++;
+                stats[match.t1].courts[court.name] = (stats[match.t1].courts[court.name] || 0) + 1;
+                stats[match.t2].courts[court.name] = (stats[match.t2].courts[court.name] || 0) + 1;
+                
+                // Recycle pool logic
                 let poolIdx = matchPool.indexOf(match);
                 if(poolIdx > -1) matchPool.splice(poolIdx, 1);
-                if(matchPool.length === 0) { // Recycle pool
+                if(matchPool.length === 0) {
                     for(let i=0; i<tIds.length; i++) { for(let j=i+1; j<tIds.length; j++) { matchPool.push({ t1: tIds[i], t2: tIds[j] }); } }
                     shuffle(matchPool);
                 }
@@ -479,10 +425,6 @@ window.generateSchedule = function() {
         });
         currentTime.setMinutes(currentTime.getMinutes() + matchDur + breakDur);
     }
-    
-    // Auto-assign refs immediately
-    window.autoAssignReferees();
-    
     saveLocal(); renderSchedule(); showTab('schedule');
 };
 
@@ -492,39 +434,22 @@ window.renderSchedule = function() {
     window.data.matches.sort((a,b) => a.time.localeCompare(b.time));
     window.data.matches.forEach(m => { if(!groups[m.time]) groups[m.time] = []; groups[m.time].push(m); });
     
-    // Build Referee Options once
-    let refOptions = `<option value="">Velg Dommer...</option>` + 
-        window.data.referees.map(r => `<option value="${r.name}">${r.name}</option>`).join('');
-
     for(let time in groups) {
         const block = document.createElement('div');
         block.className = 'match-round-block';
         block.innerHTML = `<div class="match-round-header">Kl ${time}</div>`;
         groups[time].forEach(m => {
-            const t1 = window.data.teams.find(t => t.id == m.t1);
-            const t2 = window.data.teams.find(t => t.id == m.t2);
+            const t1 = window.data.teams.find(t => t.id == m.t1); const t2 = window.data.teams.find(t => t.id == m.t2);
             if(!t1 || !t2) return;
-            
             const row = document.createElement('div');
             row.className = 'match-item';
-            
-            // NOTE: data-print-ref is used by CSS to show ref name on print
             row.innerHTML = `
                 <div class="match-court">${m.court}<br><small>${m.type}</small></div>
                 <div class="match-teams">${t1.name} vs ${t2.name}</div>
-                <div class="match-referee" data-print-ref="${m.referee || '____________'}">
-                    <select onchange="updateMatchRef('${m.id}', this.value)">
-                        ${refOptions.replace(`value="${m.referee}"`, `value="${m.referee}" selected`)}
-                    </select>
-                </div>
                 <div class="match-inputs">
                     <input type="number" value="${m.s1 ?? ''}" onchange="updScore('${m.id}', 's1', this.value)" placeholder="0">
                     -
                     <input type="number" value="${m.s2 ?? ''}" onchange="updScore('${m.id}', 's2', this.value)" placeholder="0">
-                </div>
-                <!-- PRINT SCORE BOXES (Hidden on screen via CSS) -->
-                <div class="match-print-score-box">
-                    <div class="score-box"></div> - <div class="score-box"></div>
                 </div>
             `;
             block.appendChild(row);
@@ -533,38 +458,26 @@ window.renderSchedule = function() {
     }
 };
 
-window.updateMatchRef = function(id, name) {
-    const m = window.data.matches.find(x => x.id === id);
-    if(m) { m.referee = name; saveLocal(); renderSchedule(); }
-};
-
 window.updScore = function(id, field, val) {
     const m = window.data.matches.find(x => x.id === id);
-    if(m) {
-        m[field] = val === '' ? null : parseInt(val);
-        m.done = (m.s1 !== null && m.s2 !== null);
-        saveLocal(); updateLeaderboard();
-    }
+    if(m) { m[field] = val === '' ? null : parseInt(val); m.done = (m.s1 !== null && m.s2 !== null); saveLocal(); updateLeaderboard(); }
 };
 
 window.addManualMatch = function() {
     if(window.data.teams.length === 0) return;
     window.data.matches.push({
         id: genId(), time: "12:00", t1: window.data.teams[0].id, t2: window.data.teams[0].id,
-        court: "Manuell", type: "Ekstra", s1: null, s2: null, done: false, referee: ""
+        court: "Manuell", type: "Ekstra", s1: null, s2: null, done: false
     });
     saveLocal(); renderSchedule();
 };
 
 window.clearSchedule = function() {
-    if(confirm("Slette kampoppsettet?")) {
-        window.data.matches = []; window.data.finals = [];
-        saveLocal(); renderSchedule(); updateLeaderboard();
-    }
+    if(confirm("Slette kampoppsettet?")) { window.data.matches = []; window.data.finals = []; saveLocal(); renderSchedule(); updateLeaderboard(); }
 };
 
 // =============================================================
-// 9. CONTROL (TIMER)
+// 8. CONTROL (TIMER)
 // =============================================================
 window.timerStart = function() {
     if(isTimerRunning) return;
@@ -572,8 +485,7 @@ window.timerStart = function() {
     window.playHornShort();
     isTimerRunning = true;
     timerInterval = setInterval(() => {
-        timerSeconds--;
-        updateTimerDisplay();
+        timerSeconds--; updateTimerDisplay();
         if(timerSeconds <= 0) { window.timerPause(); window.playHornLong(); }
     }, 1000);
 };
@@ -583,8 +495,7 @@ window.adjustTimer = function(min) { timerSeconds += (min * 60); if(timerSeconds
 function updateTimerDisplay() {
     const m = Math.floor(timerSeconds / 60).toString().padStart(2, '0');
     const s = (timerSeconds % 60).toString().padStart(2, '0');
-    const el = document.getElementById('mainTimer');
-    if(el) el.innerText = `${m}:${s}`;
+    const el = document.getElementById('mainTimer'); if(el) el.innerText = `${m}:${s}`;
 }
 window.playHornShort = function() { playSound(600, 0.3, 'sine'); };
 window.playHornLong = function() {
@@ -602,7 +513,7 @@ function playSound(freq, dur, type) {
 }
 
 // =============================================================
-// 10. LEADERBOARD & FINALS
+// 9. LEADERBOARD & FINALS
 // =============================================================
 window.updateLeaderboard = function() {
     window.data.teams.forEach(t => { t.points = 0; t.stats = { played:0, w:0, d:0, l:0, gf:0, ga:0 }; });
@@ -611,7 +522,8 @@ window.updateLeaderboard = function() {
             const t1 = window.data.teams.find(t => t.id == m.t1); const t2 = window.data.teams.find(t => t.id == m.t2);
             if(t1 && t2) {
                 t1.stats.played++; t2.stats.played++;
-                t1.stats.gf += m.s1; t1.stats.ga += m.s2; t2.stats.gf += m.s2; t2.stats.ga += m.s1;
+                t1.stats.gf += m.s1; t1.stats.ga += m.s2;
+                t2.stats.gf += m.s2; t2.stats.ga += m.s1;
                 if(m.s1 > m.s2) { t1.points += 3; t1.stats.w++; t2.stats.l++; }
                 else if(m.s2 > m.s1) { t2.points += 3; t2.stats.w++; t1.stats.l++; }
                 else { t1.points += 1; t2.points += 1; t1.stats.d++; t2.stats.d++; }
@@ -648,8 +560,7 @@ window.createFinalMatch = function() {
 };
 
 function renderFinalsList() {
-    const d = document.getElementById('finalsList');
-    if(!d) return; d.innerHTML = '';
+    const d = document.getElementById('finalsList'); if(!d) return; d.innerHTML = '';
     if(!window.data.finals) return;
     window.data.finals.forEach((f, i) => {
         const div = document.createElement('div');
@@ -680,9 +591,7 @@ window.declareWinner = function(idx) {
 window.closeWinner = function() { document.getElementById('winnerOverlay').classList.add('hidden'); };
 
 function confettiEffect() {
-    const c = document.querySelector('.confetti'); 
-    if(!c) return;
-    c.innerHTML='';
+    const c = document.querySelector('.confetti'); if(!c) return; c.innerHTML='';
     for(let i=0; i<50; i++) {
         const p = document.createElement('div');
         p.style.left = Math.random()*100 + '%';
@@ -693,23 +602,17 @@ function confettiEffect() {
 }
 
 // =============================================================
-// 11. FILE IO
+// 10. FILE IO
 // =============================================================
 window.saveToFile = function() {
     const blob = new Blob([JSON.stringify(window.data, null, 2)], {type: "application/json"});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `turnering_v21.json`;
-    a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `turnering_v22.json`; a.click();
 };
 window.loadFromFile = function() {
-    const file = document.getElementById('fileInput').files[0];
-    if(!file) return;
+    const file = document.getElementById('fileInput').files[0]; if(!file) return;
     const reader = new FileReader();
-    reader.onload = e => {
-        try { window.data = JSON.parse(e.target.result); saveLocal(); location.reload(); } catch(err) { alert("Filfeil."); }
-    };
+    reader.onload = e => { try { window.data = JSON.parse(e.target.result); saveLocal(); location.reload(); } catch(err) { alert("Filfeil."); } };
     reader.readAsText(file);
 };
 
-/* Version: #21 */
+/* Version: #22 */
